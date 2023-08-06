@@ -3,7 +3,7 @@ from statsmodels.tsa.stattools import adfuller
 import matplotlib.pyplot as plt
 
 class TimeSeries:
-    def __init__(self, time_series, ticker):
+    def __init__(self, time_series, ticker=None):
         self.ticker = ticker
         self.ts = time_series
 
@@ -45,12 +45,18 @@ class TimeSeries:
         else:
             return False, pvalue
     
-    def check_for_mean_reversion(self, cutoff=0.5):
-        hurst = self.mean_reversion_test()
+    def check_for_mean_reversion(self, cutoff=0.5, MAX_LAG=4):
+        hurst = self.mean_reversion_test(MAX_LAG=MAX_LAG)
         if hurst < cutoff:
             return True, hurst
         else:
             return False, hurst
         
-
+    def run_full_test(self, adf_cutoff=0.01, hux_cutoff=0.5, MAX_LAG=4):
+        """
+        Runs the full test on a time series.
+        """
+        stationary, pvalue = self.check_for_stationarity(adf_cutoff)
+        mean_reversion, hurst = self.check_for_mean_reversion(hux_cutoff, MAX_LAG)
+        return stationary, pvalue, mean_reversion, hurst
 

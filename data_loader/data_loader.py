@@ -1,5 +1,5 @@
-import pandas as pd
-from pymongo import MongoClient, errors
+import json
+from pymongo import MongoClient, errors, ASCENDING
 from yfinance import download, Ticker
 from datetime import datetime
 
@@ -7,7 +7,8 @@ class SetStockData:
     """
     Class to download closing data from yfinance and writ to a MongoDB database.
 
-    It's optimised for updating data, so it will only download data that is not already in the database. 
+    It's optimised for reading data, so each collection is a unique ticker with a list of dates and closing prices. Most of the code is to 
+    handle the edge cases of updating the database.
 
     The database is structured as follows:
     - There is a collection for the price data "price_data", which is a timeseries collection.
@@ -24,14 +25,9 @@ class SetStockData:
         self.meta_collection = self.db[meta_collection_name]
 
         try:
-            self.db.create_collection(
-                collection_name,
-                timeseries={
-                    'timeField': 'date',
-                    'metaField': 'ticker',
-                    'granularity': 'days'  # the granularity of the time series bucketing
-                }
-            )
+            self.db.create_collection(collection_name)
+            self.db[collection_name].create_index([("ticker", ASCENDING), ("closing_prices.date", ASCENDING)])
+
         except errors.CollectionInvalid:
             pass  # Collection already exists
 
@@ -59,36 +55,59 @@ class SetStockData:
             return meta["earliest_date"], meta["latest_date"] 
         else:
             return None, None
-
+    
     def download_data(self, ticker, start_date, end_date):
+        print('Happening here')
         data = download(ticker, start=start_date, end=end_date)
         if data.empty:
             print(f"No new data to download for {ticker}")
             return None
 
-        closing_prices = [{
-            "ticker": ticker,
-            "date": index.to_pydatetime(),
-            "close": row["Close"]
-        } for index, row in data.iterrows()]
-
+        closing_prices = [{"date": index.to_pydatetime(), "price": row["Close"]} for index, row in data.iterrows()]
         return closing_prices
+
 
     def update_single_ticker(self, ticker):
         earliest_data_date, last_data_date = self.get_data_date_range(ticker)
         earliest_data_date_dt = self.str_to_date(earliest_data_date)
         last_data_date_dt = self.str_to_date(last_data_date)
+
         if earliest_data_date is None and last_data_date is None:
+            print('None values')
+
             data = self.download_data(ticker, self.start_date, self.end_date)
             if data is not None:
-                self.collection.insert_many(data)
+                self.collection.update_one(
+                    {"_id": ticker},
+                    {
+                        "$push": {
+                            "price": {
+                                "$each": data
+                            }
+                        },
+                    },
+                    upsert=True,
+                )
                 self.initialise_date_range(ticker, self.start_date, self.end_date)
                 self.initialise_metadata(ticker)
             return
+
         if self.start_date_dt < earliest_data_date_dt:
+            print('Start before current start')
             data = self.download_data(ticker, self.start_date, self.date_to_str(earliest_data_date_dt))
             if data is not None:
-                self.collection.insert_many(data)
+                self.collection.update_one(
+                    {"_id": ticker},
+                    {
+                        "$push": {
+                            "closing_prices": {
+                                "$each": data,
+                                "$position": 0
+                            }
+                        },
+                    },
+                    upsert=True,
+                )
                 self.date_collection.update_one(
                     {"_id": ticker},
                     {
@@ -97,11 +116,23 @@ class SetStockData:
                         }
                     }
                 )
+
         if last_data_date_dt < self.end_date_dt:
+            print('End after current end')
+
             data = self.download_data(ticker, self.date_to_str(last_data_date_dt), self.end_date)
-            print(data)
             if data is not None:
-                self.collection.insert_many(data)
+                self.collection.update_one(
+                    {"_id": ticker},
+                    {
+                        "$push": {
+                            "closing_prices": {
+                                "$each": data
+                            }
+                        },
+                    },
+                    upsert=True,
+                )
                 self.date_collection.update_one(
                     {"_id": ticker},
                     {
@@ -110,6 +141,7 @@ class SetStockData:
                         }
                     }
                 )
+
 
     def update_data(self, tickers, start_date, end_date):
         self.start_date_dt = self.str_to_date(start_date)
@@ -120,26 +152,42 @@ class SetStockData:
         for ticker in tickers:
             self.update_single_ticker(ticker)
 
+    def update_single_data(self, ticker, start_date, end_date):
+        self.start_date_dt = self.str_to_date(start_date)
+        self.end_date_dt = self.str_to_date(end_date)
+        self.start_date = start_date
+        self.end_date = end_date
+
+        self.update_single_ticker(ticker)
+
     def bulk_insert_data(self, tickers, start_date, end_date):
         """
         Only call this method when there is no other data in the mongodb database. It group downloads the yfinance data and inserts it into the database
         for a fixed date range regardless of whether there is data already in the database. We call this function at the initialisation to ensure we don't
         need to wait too long to start running operations. The pre-set date range is 2021-08-01 to 2023-08-01.
         """
-        
+        print("Happening here???")
         data = download(tickers, start=start_date, end=end_date, group_by="ticker")
+        data = data.dropna(axis=1, how='all')
 
+        tickers = set([ticker for ticker,_ in data.columns])
         for ticker in tickers:
-            self.initialise_date_range(ticker, start_date, end_date)
-
-            self.initialise_metadata(ticker)
             ticker_data = data[ticker]
-            closing_prices = [{
-                "ticker": ticker,
-                "date": index.to_pydatetime(),
-                "close": row["Close"]
-            } for index, row in ticker_data.iterrows()]
-            self.collection.insert_many(closing_prices)
+            closing_prices = [{"date": index.to_pydatetime(), "price": row["Close"]} for index, row in ticker_data.iterrows()]
+
+            self.initialise_date_range(ticker, start_date, end_date)
+            self.initialise_metadata(ticker)
+            self.collection.update_one(
+                {"_id": ticker},
+                {
+                    "$push": {
+                        "closing_prices": {
+                            "$each": closing_prices
+                        }
+                    },
+                },
+                upsert=True,
+            )
 
     @staticmethod
     def str_to_date(date_str):
@@ -153,10 +201,16 @@ class SetStockData:
         if date is None:
             return None
         return date.strftime("%Y-%m-%d")
-        
-#s = SetStockData()
-#tickers = ['SMCI', 'LSCC', 'OVV', 'SAIA', 'CHK']
-#start_date = "2021-01-01"
-#end_date = "2023-07-01"
-#
-#s.update_data(tickers, start_date, end_date)
+
+if __name__ == "__main__":
+    with open('./data_loader/tickers.json') as f:
+        tickers = json.load(f)
+    full_list = []
+    for key in tickers.keys():
+        full_list.extend(tickers[key])
+    full_list = list(set(full_list))
+    s = SetStockData()
+    start_date = "2019-07-01"
+    end_date = "2023-07-01"
+
+    s.bulk_insert_data(full_list, start_date, end_date)
