@@ -37,14 +37,13 @@ class GetStockData:
         Finds the latest earliest date and earliest latest date to create a minimal date range with 
         to run SOM on.
         """
-        earliest_date = datetime.now()-timedelta(days=365*10)
+        earliest_date = datetime.now()-timedelta(days=365*100)
         latest_date = datetime.now()
         for ticker in tickers:
             cur_earliest_date, cur_latest_date = self.get_ticker_date_range(ticker)
             cur_earliest_date_dt = self.str_to_date(cur_earliest_date)
             cur_latest_date_dt = self.str_to_date(cur_latest_date)
             if cur_earliest_date_dt is not None and cur_latest_date_dt is not None:
-                print(ticker, cur_earliest_date_dt, cur_latest_date_dt)
                 if cur_earliest_date_dt > earliest_date:
                     earliest_date = cur_earliest_date_dt
                 if cur_latest_date_dt < latest_date:
@@ -123,10 +122,6 @@ class GetStockData:
         Collate a dataset from the database for a list of tickers and a date range.
         """
         self.set_dates(start_date, end_date)
-        print("Getting data for tickers:", tickers)
-        print("Date range:", self.start_date, self.end_date)
-        print(self.start_date_dt, self.end_date_dt)
-
         dfs = []
         for ticker in tickers:
             df = self.get_data(ticker)
@@ -147,7 +142,14 @@ class GetStockData:
             return cursor['closing_prices'][0]['price']
         else:
             return None
-    
+        
+    @staticmethod
+    def prune_data_frame(df):
+        """
+        Prune a dataframe to remove rows with missing values.
+        """
+        df = df.dropna()
+        return df
     @staticmethod
     def str_to_date(date_str):
         if isinstance(date_str, str):

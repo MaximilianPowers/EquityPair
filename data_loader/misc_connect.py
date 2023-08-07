@@ -5,16 +5,16 @@ class MongoConnect:
     Class to store miscellaneous data in MongoDB such as clustering results,
     strategy performance and other miscellaneous data.
     """
-    def __init__(self, mongodb_url="mongodb://localhost:27017/", cluster_collection="cluster_results", pairs_collections="pairs_results"):
+    def __init__(self, mongodb_url="mongodb://localhost:27017/", cluster_collection="cluster_results", pairs_collections="pairs_results", strategy_collection="strategy_results"):
         self.client = MongoClient(mongodb_url)
         self.db = self.client["equity_data"]
 
         self.cluster_collection = self.db[cluster_collection]
-        #self.strategy_collection = self.db[strategy_collection]
+        self.strategy_collection = self.db[strategy_collection]
         self.pairs_collection = self.db[pairs_collections]
         try:
             self.db.create_collection(cluster_collection)
-            #self.db.create_collection(strategy_collection)
+            self.db.create_collection(strategy_collection)
             self.db.create_collection(pairs_collections)
         except errors.CollectionInvalid:
             pass
@@ -171,3 +171,28 @@ class MongoConnect:
             List of method, chosen_cluster, start_date, end_date combinations.
         """
         return self.pairs_collection.find({}, {"method": 1, "chosen_cluster": 1, "start_date": 1, "end_date": 1, "_id": 0})
+    
+    def post_strategy_results(self, ticker_1, ticker_2, start_training_date, end_training_date, start_date_trade, end_date_trade, hyperparameters, trades):
+        """
+        Posts list of trades to MongoDB.
+        """
+        criteria = {
+            "ticker_1": ticker_1,
+            "ticker_2": ticker_2,
+            "start_training_date": start_training_date,
+            "end_training_date": end_training_date,
+            "start_date_trade": start_date_trade,
+            "end_date_trade": end_date_trade,
+            "hyperparameters": hyperparameters
+        }
+        new_data = { "$set": {
+            "ticker_1": ticker_1,
+            "ticker_2": ticker_2,
+            "start_training_date": start_training_date,
+            "end_training_date": end_training_date,
+            "start_date_trade": start_date_trade,
+            "end_date_trade": end_date_trade,
+            "hyperparameters": hyperparameters,
+            "trades": trades
+        }}
+        self.strategy_collection.update_one(criteria, new_data, upsert=True)

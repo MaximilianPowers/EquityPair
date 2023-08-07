@@ -1,36 +1,76 @@
 import pandas as pd
-from finance.single_pair_strat.online_strategy import OnlineRegressionStrategy
-import json
 import numpy as np
 import matplotlib.pyplot as plt
-from data_loader.misc_connect import MongoConnect
+from finance.single_pair_strat.kalman import KalmanStrategy
+from datetime import datetime, timedelta
+import json
 
-m = MongoConnect()
-capital  = 1_000_000
-ticker_1 = "MD"
-ticker_2 = "EA"
+hyperparameters = {"buy_sigma": 2, "sell_sigma_low": .001, "sell_sigma_high": np.inf, "delta": 1e-5, "maxlen": 10000, "static": False}
 
-start_training_date = "2020-06-01"
-end_training_date = "2022-06-01"
+# Create some dummy data
+np.random.seed(42)
+dates = pd.date_range(start="2021-01-01", periods=100, freq='D').astype(str)
+ticker_1_data = np.sin(np.linspace(0, 10, 100)) + np.random.normal(scale=0.1, size=100)-0.5
+ticker_2_data = np.sin(np.linspace(0, 10, 100)) + np.random.normal(scale=0.1, size=100)
+start_training_date = '2021-01-01'
+end_training_date = dates[-1]
 
-start_trading_date = "2020-06-02"
-end_trading_date = "2023-06-02"
+# Create a DataFrame
+ts_data = pd.DataFrame({
+    'Date': dates,
+    'MSFT': ticker_1_data,
+    'AMZN': ticker_2_data,
+    'Mode': 'Train'
+})
 
-hyperparameters = {"buy_sigma": 1, "sell_sigma_low": 0.1, 
-                   "sell_sigma_high": np.inf, "delta": 1e-5, 
-                   "maxlen": 100, "static": False}
-method = "KalmanRegression"
-strategy = OnlineRegressionStrategy(method, capital, ticker_1, ticker_2, start_training_date, end_training_date, start_trading_date, end_trading_date, hyperparameters, None)
+dates = pd.date_range(start="2022-01-01", periods=100, freq='D').astype(str) 
+a = np.zeros(100)
+a[:10] = 1
+ticker_1_data = a + np.sin(np.linspace(1, 10, 100)) + np.random.normal(scale=0.1, size=100)-0.5
+ticker_2_data = np.sin(np.linspace(0, 10, 100)) + np.random.normal(scale=0.1, size=100)
+
+# Create a DataFrame
+ts_data = pd.concat((ts_data, pd.DataFrame({
+    'Date': dates,
+    'MSFT': ticker_1_data,
+    'AMZN': ticker_2_data,
+    'Mode': 'Trade'
+})))
+
+ts_data.index = ts_data['Date']
+
+# Assuming you've defined a KalmanStrategy class and related methods
+
+capital = 100000
+ticker_1 = 'MSFT'
+ticker_2 = 'AMZN'
+
+start_date = '2022-01-01'
+end_date = dates[-1]
+
+strategy = KalmanStrategy(
+    capital, 
+    ticker_1, 
+    ticker_2, 
+    start_training_date, 
+    end_training_date, 
+    start_date, 
+    end_date,
+    hyperparameters,
+    ts_data # assuming your constructor takes the DataFrame or adjust as necessary
+)
+
 strategy.train_model()
 strategy.trade_model()
+with open("res_1.json", "w") as f:
+    json.dump(strategy.portfolio.closed_trades, f)
 
 print(f"PnL: {strategy.portfolio.pnl}")
 print(f"Number of trades: {len(strategy.portfolio.closed_trades)}")
 
-with open("res_1.json", "w") as f:
-    json.dump(strategy.portfolio.closed_trades, f)
+# Assuming your portfolio method displays the results
+#strategy.portfolio.plot_portfolio()
 
-strategy.post_trades(m)
 ts1 = strategy.ts[strategy.ts["Mode"] == "Trade"][ticker_1]
 ts1.index = pd.to_datetime(ts1.index)
 ts2 = strategy.ts[strategy.ts["Mode"] == "Trade"][ticker_2]
@@ -75,28 +115,3 @@ ax.set_title("PnL over time")
 ax.set_xlabel("Time")
 ax.set_ylabel("PnL")
 fig.savefig("res_2.png")
-
-res = np.array(strategy.store_res)
-fig, ax = plt.subplots()
-ax.plot(res[:, 0], label="Normal Buy")
-ax.plot(res[:, 1], label="Swapped Buy")
-ax.plot(res[:, 2], label="Normal Sell")
-ax.plot(res[:, 3], label="Swapped Sell")
-ax.plot(res[:, 4], label="Spread")
-ax.legend()
-ax.set_title("Kalman Filter Trading Strategy")
-ax.set_xlabel("Time")
-# Set legend position
-ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
-fig.savefig("res_3.png")
-
-fig, ax = plt.subplots()
-ax.plot(res[:, -2], label="Alpha")
-ax.plot(res[:, -1], label="Beta")
-ax.legend()
-ax.set_title("Kalman Filter Trading Strategy")
-ax.set_xlabel("Time")
-# Set legend position
-ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
-fig.savefig("res_4.png")
-

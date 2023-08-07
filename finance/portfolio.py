@@ -1,89 +1,73 @@
-from data_loader.get_data import GetStockData
 
-
-g = GetStockData()
-
-class PairTradingStrategy(object):
+import matplotlib.pyplot as plt
+class Portfolio(object):
     """
-    A trading strategy that executes trades based on signals
-    and manages the portfolio.
+    A base class for pair trading strategies.
     """
-    def __init__(self, capital, max_alloc):
+    def __init__(self, capital, records, verbose=False):
         self.capital = capital
-        self.max_alloc = max_alloc
+        self.records = records
         self.portfolio = {} # Key: Ticker, Value: Quantity
         self.pnl = 0.0
-        self.trades = []
-        self.risk = 0.0
+        self.open_trades = {}
+        self.closed_trades = {}
+        self.store_results = []
+        self.portfolio_value = capital
+        self.verbose = verbose
 
-    def compute_risk(self):
+    def get_portfolio_value(self, date):
         """
-        Compute risk of the portfolio.
+        Returns the value of the portfolio.
         """
-        # Use your risk calculation model
-        self.risk = 0.0
-        for ticker, quantity in self.portfolio.items():
-            # Risk calculation depends on your risk model
-            # For simplicity, assume risk is proportional to quantity
-            self.risk += abs(quantity)
+        value = self.capital
+        for ticker in self.portfolio:
+            value += self.portfolio[ticker] * self.records[date][ticker]
+        return value 
     
-    def execute_trade(self, ticker, quantity, date):
-        """
-        Execute a trade.
-        """
-        # Check capital constraints
-        trade_value = quantity * g.get_single_date_price(ticker, date)
-        if trade_value is None:
-            raise Exception("Trade not executed due to missing price data.") 
-
-        elif trade_value > self.capital:
-            raise Exception("Trade not executed due to capital constraint.")
-        
-        # Execute trade
-        self.portfolio[ticker] = self.portfolio.get(ticker, 0) + quantity
-        self.capital -= trade_value
-        self.pnl -= trade_value
-        self.trades.append((ticker, quantity))
-        
-        # Update risk
-        self.compute_risk()
-
-    def close_position(self, ticker, date):
-        """
-        Close a position.
-        """
-        if ticker in self.portfolio:
-            close_price = g.get_single_date_price(ticker, date)
-            quantity = self.portfolio[ticker]
-            self.pnl += quantity * close_price
-            self.capital += quantity * close_price
-            del self.portfolio[ticker]
-
-    def check_signal(self, ticker, observations):
-        """
-        Check if there is a trading signal.
-        """
-        # Use your signal generation model
-        spread = model.get_spread(observations)
-        mean_spread = spread.mean()
-        std_spread = spread.std()
-
-        # Check for buy signal
-        if spread.iloc[-1] < mean_spread - std_spread:
-            return 'buy'
-        # Check for sell signal
-        elif spread.iloc[-1] > mean_spread + std_spread:
-            return 'sell'
-        else:
-            return None
+    def _create_open_trade_record(self, long_ticker, short_ticker, long_quantity, short_quantity, date):
+        return {
+            "entry_date": date,
+            "long_ticker": long_ticker,
+            "short_ticker": short_ticker,
+            "long_quantity": long_quantity,
+            "short_quantity": short_quantity,
+            "long_price": self.records[date][long_ticker],
+            "short_price": self.records[date][short_ticker],
+            "capital_remaining": self.capital
+        }
     
-    def trade(self, ticker, observations, date):
+    def _create_closed_trade_record(self, date, long_ticker, short_ticker, long_quantity, 
+                short_quantity, exit_date, exit_price_long, exit_price_short, trade_pnl):
+        return {
+            "entry_date": date,
+            "long_ticker": long_ticker,
+            "short_ticker": short_ticker,
+            "long_quantity": long_quantity,
+            "short_quantity": short_quantity,
+            "long_price": self.records[date][long_ticker],
+            "short_price": self.records[date][short_ticker],
+            "trade_exit_date": exit_date,
+            "trade_exit_price_long": exit_price_long,
+            "trade_exit_price_short": exit_price_short,
+            "pnl": trade_pnl
+        }
+    
+    def store_result(self, date):
         """
-        Check for trading signal and execute trade if signal exists.
+        Stores the results of the current trading period.
         """
-        signal = self.check_signal(ticker, observations)
-        if signal == 'buy':
-            quantity = self.capital * self.max_alloc / g.get_single_date_price(ticker, date)
-            self.execute_trade(ticker, quantity)
-        elif signal == 'sell':
-            self.close_position(ticker)
+        portfolio_value = self.get_portfolio_value(date)
+        self.portfolio_value = portfolio_value
+        self.store_results.append(portfolio_value)
+    
+    def plot_portfolio(self):
+        """
+        Plots the strategy over time, including entry and exit positions.
+        """
+        fig, ax = plt.subplots(figsize=(16, 9))
+        ax.plot(self.store_results)
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Portfolio Value")
+        plt.show()
+
+        
