@@ -12,7 +12,7 @@ from plotly.subplots import make_subplots
 
 global cluster_method
 
-def register_callbacks(app, data_fetcher, misc_connect):
+def register_analytics_callbacks(app, data_fetcher, misc_connect):
     global cluster_method
     cluster_method = None
     @app.callback(
@@ -194,7 +194,9 @@ def register_callbacks(app, data_fetcher, misc_connect):
                 'textOverflow': 'ellipsis', # this line will truncate the text with an ellipsis
                 'maxWidth': 0, # this line will allow the text to break across lines
                 'whiteSpace': 'normal' # this line will allow the text to break across lines
+                
             },
+            style_data_conditional=[{'if': {'column_id': 'column 1'}, 'textOverflow': 'ellipsis'}],
             style_table={
                 'overflowX': 'scroll', # this line will make the table horizontally scrollable
             },
@@ -437,13 +439,13 @@ def register_callbacks(app, data_fetcher, misc_connect):
         df = df.pivot(columns='ticker', values='close')
         df = df.dropna()
         # Compute OLS hedging ratio
-        ols = OLSRegression(df[ticker1], df[ticker2])   
+        ols = OLSRegression(df[ticker2], df[ticker1])   
         ols.run()
         ols_hedging_ratio = ols.cur_beta
         ols_hedging_const = ols.cur_alpha
 
         # Compute Kalman Filter hedging ratio
-        kalman = KalmanRegression(df[ticker1], df[ticker2])
+        kalman = KalmanRegression(df[ticker2], df[ticker1])
         kalman.run()
         kf_hedging_ratio = kalman.cur_beta
         kf_hedging_const = kalman.cur_alpha
@@ -462,10 +464,10 @@ def register_callbacks(app, data_fetcher, misc_connect):
         fig.update_layout(xaxis_title="Date", yaxis_title="Price", margin=dict(l=0, r=0, t=36, b=0))
 
         # Create information text
-        info_text = f"OLS: {ols_hedging_ratio:.3f} | Kalman: {kf_hedging_ratio:.3f}"
+        info_text = f"OLS: {ols_hedging_ratio:.3f} | Kalman: {kf_hedging_ratio:.3f} | ADF: {adf_coef:.3f}"
         div = html.H3(
                         children = info_text,
-                        style = {"fontWeight": "bold"}
+                        style = {"fontWeight": "bold", "width": "100%"}
                     )
         # Return figure and markdown in a Div
         return fig, div
@@ -530,7 +532,7 @@ def register_callbacks(app, data_fetcher, misc_connect):
     Output('slider-K-value', 'children'),
         Input('slider-K', 'value')
     )
-    def update_adf_value(value):
+    def update_Kvalue(value):
         return f'Top-K: {value:.2f}' 
     
     

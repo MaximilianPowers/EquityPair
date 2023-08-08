@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+from analytics_module.pair_analysis import CointegrationTest
 
 class Strategy(ABC):
     def __init__(self, capital, ticker_1, ticker_2, start_training_date, end_training_date, start_date, end_date, hyperparameters = {}, ts=None):        
@@ -36,6 +36,7 @@ class Strategy(ABC):
         else:
             self.g = GetStockData()
             self.store_ticker_data()
+
 
         self.capital = capital
         records = self.ts.transpose().to_dict()
@@ -93,6 +94,27 @@ class Strategy(ABC):
         ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
         plt.show()
     
+    def run_cointegration_test(self, maxlen):
+        ts = self.ts.dropna()
+        coint = CointegrationTest(ts[ts["Mode"] == "Train"][self.ticker_1],
+                                   ts[ts["Mode"] == "Train"][self.ticker_2],
+                                   maxlen=maxlen)
+        coint.run()
+        observations = ts[ts["Mode"] == "Trade"][[self.ticker_1, self.ticker_2]]
+        coint_spread = []
+        coint_p_value = []
+        dates = []
+        for index, observation in enumerate(observations.values):
+            if observation[0] is None or observation[1] is None:
+                continue
+            if np.isnan(observation[0]) or np.isnan(observation[1]):
+                continue
+            coint.update(observation)
+            coint_p_value.append(coint.cur_adf)
+            coint_spread.append(coint.spread())
+            dates.append(observations.index[index])
+        return dates, coint_spread, coint_p_value
+
     def post_trades(self, m):
         """
         Given a MongoDB connection, posts the history of trades to the database.

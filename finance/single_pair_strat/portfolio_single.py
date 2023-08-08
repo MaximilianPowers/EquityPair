@@ -1,5 +1,5 @@
 from finance.portfolio import Portfolio
-MAX_TOL = .1
+MAX_TOL = .4
 class SinglePairPortfolio(Portfolio):
     """
     A trading strategy that executes trades based on signals

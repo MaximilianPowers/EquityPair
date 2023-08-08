@@ -5,14 +5,7 @@ from analytics_module.pair_analysis import KalmanRegression, OLSRegression
 BASE_BUY_SIGMA = 1 
 BASE_SELL_SIGMA_LOW = 0.5
 BASE_SELL_SIGMA_HIGH = 2
-BASE_STATIC = False
-
-# Kalman hyperparameters
-BASE_DELTA = 1e-5
-BASE_KALMAN_MAXLEN = 3000
-
-# OLS hyperparameters
-BASE_OLS_MAXLEN = 50
+BASE_MAXLEN = 3000
 
 
 class OnlineRegressionStrategy(Strategy):
@@ -35,7 +28,6 @@ class OnlineRegressionStrategy(Strategy):
 
         if method == 'KalmanRegression':
             self.method = KalmanRegression(self.time_series_1, self.time_series_2, 
-                                       delta = self.hyperparameters["delta"], 
                                        maxlen = self.hyperparameters["maxlen"])           
         elif method == 'OLSRegression':
             self.method = OLSRegression(self.time_series_1, self.time_series_2, 
@@ -64,12 +56,7 @@ class OnlineRegressionStrategy(Strategy):
         if self.hyperparameters["buy_sigma"] < self.hyperparameters["sell_sigma_low"]:
             raise ValueError("buy_sigma must be greater than sell_sigma_low.")
         
-        self.hyperparameters["delta"] = hyperparameters.get("delta", BASE_DELTA)
-        if self.method_name == 'KalmanRegression':
-            self.hyperparameters["maxlen"] = hyperparameters.get("maxlen", BASE_KALMAN_MAXLEN)
-        elif self.method_name == 'OLSRegression':
-            self.hyperparameters["maxlen"] = hyperparameters.get("maxlen", BASE_OLS_MAXLEN)
-        self.hyperparameters["static"] = hyperparameters.get("static", BASE_STATIC)
+        self.hyperparameters["maxlen"] = hyperparameters.get("maxlen", BASE_MAXLEN)
 
     def train_model(self):
         self.method.run()
@@ -98,8 +85,7 @@ class OnlineRegressionStrategy(Strategy):
 
     def update_model(self, observation):
         self.method.update(observation)
-        if not self.hyperparameters["static"]:
-            self.update_threshold(observation)
+        self.update_threshold(observation)
     
     def trade_model(self):
         
@@ -118,9 +104,9 @@ class OnlineRegressionStrategy(Strategy):
                     self.threshold_swapped_buy,
                     self.threshold_normal_sell_low,
                     self.threshold_swapped_sell_low,
+                    self.threshold_normal_sell_high,
+                    self.threshold_swapped_sell_high,
                     self.method.get_spread(observation),
-                    self.method.cur_beta,
-                    self.method.cur_alpha,
             ])
             date = dates[indx]
             observation = (observation[0], observation[1])

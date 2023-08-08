@@ -136,12 +136,15 @@ class CointegrationTest(OnlineRegression):
     """
     Tests for cointegration between two time series using the Augmented Dickey-Fuller test.
     """
-    def __init__(self, ts1, ts2):
+    def __init__(self, ts1, ts2, maxlen=3000):
         super().__init__(ts1, ts2)
-        self.data = pd.DataFrame({self._x: ts2, self._y: ts1})
-    
+        self.maxlen = maxlen
+        self.ts1 = deque(ts1, maxlen=self.maxlen)
+        self.ts2 = deque(ts2, maxlen=self.maxlen)
+
     def run(self):
-        self.model = OLS(self.data[self._y], add_constant(self.data[self._x]))
+        data = pd.DataFrame({self._x: list(self.ts1), self._y: list(self.ts2)}) # Swap ts1 and ts2
+        self.model = OLS(data[self._y], add_constant(data[self._x])) # Swap x and y
         self.results = self.model.fit()
         self.residuals = self.results.resid
 
@@ -150,16 +153,10 @@ class CointegrationTest(OnlineRegression):
         self.cur_adf = self.adf_pvalues[-1]
 
     def update(self, observations):
-        new_obs = pd.DataFrame({self._x: [observations[self._x]], 
-                                self._y: [observations[self._y]]})
-        self.data = pd.concat([self.data, new_obs])
-        self.model = OLS(self.data[self._y], add_constant(self.data[self._x]))
-        self.results = self.model.fit()
-        self.residuals = self.results.resid
-
-        adf_result = adfuller(self.residuals)
-        self.adf_pvalues.append(adf_result[1])
-        self.cur_adf = self.adf_pvalues[-1]
+        x, y = observations
+        self.ts2.append(y) 
+        self.ts1.append(x) 
+        self.run() 
 
     def is_cointegrated(self, cut_off=0.05):
         if not self.adf_pvalues:
@@ -168,5 +165,5 @@ class CointegrationTest(OnlineRegression):
         return self.adf_pvalues[-1] < cut_off, self.adf_pvalues[-1]
     
     def spread(self):
-        return self.residuals
+        return np.sum(self.residuals)
     

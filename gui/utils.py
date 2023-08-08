@@ -35,7 +35,14 @@ def create_button_with_loading(button_id, button_label, loading_id):
 
 def create_slider(id_, min_, max_, step, value):
     return dbc.Col([
-        html.Div(id=id_+"-value", style={'text-align': 'middle'}),
+        html.Div(
+            id=id_+"-value",
+            style={
+                'text-align': 'center',
+                'vertical-align': 'top',
+                'line-height': '1',
+            }
+        ),
         html.Div(
             dcc.Slider(
                 id=id_,
@@ -45,7 +52,17 @@ def create_slider(id_, min_, max_, step, value):
                 value=value,
                 marks=None
             ),
-            style={'width': '95%', 'margin': '0 auto', 'transform': 'scale(1.2)'}
+            style={
+                'width': '95%',
+                'margin': '0 auto',
+                'transform': 'scale(1.2)',
+                'vertical-align': 'bottom',
+                'height': '150%',
+                'padding-top': '15px',
+                'padding-bottom': '0px',
+                'padding-left': '0px',
+                'padding-right': '0px',
+            }
         ),
     ], width=2)
 

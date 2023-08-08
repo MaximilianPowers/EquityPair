@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 from gui.utils import create_dropdown, create_date_picker, create_button_with_loading, create_slider
 
 # Define the layout here
-def get_layout(names):
+def get_analytics_layout(names):
     layout = html.Div([
         dbc.Container([
             get_title(),
@@ -17,7 +17,7 @@ def get_layout(names):
 
 
 def get_title():
-    return dbc.Row(dbc.Col(html.H1("Financial Analysis Dashboard")), style={'margin-bottom': '20px'})
+    return dbc.Row(dbc.Col(html.H1("Financial Analysis Dashboard")), style={'margin-bottom': '20px', 'padding-top': "8%"})
 
 def identify_stat_and_mr(names):
     title = dbc.Row(dbc.Col(html.H2("Identify Stationary & Mean-Reverting Series")), style={'margin-bottom': '20px'})
@@ -174,11 +174,21 @@ def hedging_ratio(names):
                 style={'overflow': 'visible', 'text-align': 'left'}
             ),
             dbc.Col(
-                html.Div(
-                    html.H3(
-                        children = "OLS: - | Kalman: - ",
-                        style = {"fontWeight": "bold"}
-                    ), id="insert-res", style={"width":"50%"}))
+    html.Div(
+        html.H3(
+            children="OLS: - | Kalman: - | Coint: -",
+            style={
+                "fontWeight": "bold",
+                "white-space": "nowrap",
+                "overflow": "hidden",
+                "text-overflow": "ellipsis",
+                "width": "100%"
+            }
+        ),
+        id="insert-res"
+    ),
+    style={'margin-bottom': '10px'}
+)
         ], style={'margin-bottom': '10px'})
     res = dbc.Row([
             dbc.Col([

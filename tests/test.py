@@ -1,26 +1,52 @@
+# TEST TO RUN THE STRATEGY
+
 import pandas as pd
 from finance.single_pair_strat.online_strategy import OnlineRegressionStrategy
+from finance.single_pair_strat.kalman import KalmanStrategy
+from finance.single_pair_strat.ols import OLSStrategy
 import json
 import numpy as np
 import matplotlib.pyplot as plt
 from data_loader.misc_connect import MongoConnect
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("--ticker_1", type=str, default="MD")
+parser.add_argument("--ticker_2", type=str, default="EA")
+parser.add_argument("--start_training_date", type=str, default="2020-06-01")
+parser.add_argument("--end_training_date", type=str, default="2022-06-01")
+parser.add_argument("--start_trading_date", type=str, default="2022-06-02")
+parser.add_argument("--end_trading_date", type=str, default="2023-06-02")
+parser.add_argument("--method", type=str, default="KalmanRegression")
+args = parser.parse_args()
 
 m = MongoConnect()
 capital  = 1_000_000
-ticker_1 = "MD"
-ticker_2 = "EA"
+ticker_1 = args.ticker_1
+ticker_2 = args.ticker_2
 
-start_training_date = "2020-06-01"
-end_training_date = "2022-06-01"
+start_training_date = args.start_training_date
+end_training_date = args.end_training_date
 
-start_trading_date = "2020-06-02"
-end_trading_date = "2023-06-02"
+start_trading_date = args.start_trading_date
+end_trading_date = args.end_trading_date
 
-hyperparameters = {"buy_sigma": 1, "sell_sigma_low": 0.1, 
-                   "sell_sigma_high": np.inf, "delta": 1e-5, 
-                   "maxlen": 100, "static": False}
-method = "KalmanRegression"
-strategy = OnlineRegressionStrategy(method, capital, ticker_1, ticker_2, start_training_date, end_training_date, start_trading_date, end_trading_date, hyperparameters, None)
+hyperparameters = {"buy_sigma": 1, "sell_sigma_low": 0.2,
+                     "sell_sigma_high": 3, "maxlen": 1000}
+method = args.method
+
+if method not in ["KalmanRegression", "OLSRegression"]:
+    raise ValueError("method must be either KalmanRegression or OLSRegression.")
+
+if method == 'KalmanRegression':
+    method_name = "Kalman"
+if method == 'OLSRegression':
+    method_name = "OLS"
+
+strategy = OnlineRegressionStrategy(method, capital, ticker_1, ticker_2, 
+                          start_training_date, end_training_date, 
+                          start_trading_date, end_trading_date, 
+                          hyperparameters, None)
 strategy.train_model()
 strategy.trade_model()
 
@@ -39,7 +65,7 @@ fig, ax = plt.subplots(figsize=(30, 10))
 ax.plot(ts1.index, ts1.values)
 ax.plot(ts2.index, ts2.values)
 ax.legend([ticker_1, ticker_2])
-ax.set_title("Kalman Filter Trading Strategy")
+ax.set_title(f"{method_name} Pairs Trading Strategy")
 # Trade entry details
 for key in list(strategy.portfolio.closed_trades.keys()):
     trade = strategy.portfolio.closed_trades[key]
@@ -65,7 +91,8 @@ for key in list(strategy.portfolio.closed_trades.keys()):
 # Remove x ticks:
 ax.set_xticks([])
 
-fig.savefig('res_1.png')
+fig.savefig(f"./finance/figs/res_1_{method_name.lower()}.png")
+
 
 df = pd.read_json("res_1.json").transpose()
 strategy.portfolio.closed_trades
@@ -74,7 +101,8 @@ ax.plot(np.cumsum(df["pnl"].values))
 ax.set_title("PnL over time")
 ax.set_xlabel("Time")
 ax.set_ylabel("PnL")
-fig.savefig("res_2.png")
+fig.savefig(f"./finance/figs/res_2_{method_name.lower()}.png")
+
 
 res = np.array(strategy.store_res)
 fig, ax = plt.subplots()
@@ -84,19 +112,19 @@ ax.plot(res[:, 2], label="Normal Sell")
 ax.plot(res[:, 3], label="Swapped Sell")
 ax.plot(res[:, 4], label="Spread")
 ax.legend()
-ax.set_title("Kalman Filter Trading Strategy")
+ax.set_title(f"{method_name} Regression Trading Strategy")
 ax.set_xlabel("Time")
 # Set legend position
 ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
-fig.savefig("res_3.png")
+fig.savefig(f"./finance/figs/res_3_{method_name.lower()}.png")
 
 fig, ax = plt.subplots()
 ax.plot(res[:, -2], label="Alpha")
 ax.plot(res[:, -1], label="Beta")
 ax.legend()
-ax.set_title("Kalman Filter Trading Strategy")
+ax.set_title(f"{method_name} Regression Trading Strategy")
 ax.set_xlabel("Time")
 # Set legend position
 ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
-fig.savefig("res_4.png")
+fig.savefig(f"./finance/figs/res_4_{method_name.lower()}.png")
 

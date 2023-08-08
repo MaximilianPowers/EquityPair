@@ -26,7 +26,7 @@ class KalmanStrategy(Strategy):
         self.time_series_2 = self.ts[self.ts["Mode"] == "Train"][self.ticker_2]
 
         self.count = len(self.time_series_1.index)
-        self.kalman = KalmanRegression(self.time_series_2, self.time_series_1, 
+        self.kalman = KalmanRegression(self.time_series_1, self.time_series_2, 
                                        delta = self.hyperparameters["delta"], 
                                        maxlen = self.hyperparameters["maxlen"])           
     
