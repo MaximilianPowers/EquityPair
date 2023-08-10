@@ -1,29 +1,34 @@
 from dash import dcc, html
 import dash_bootstrap_components as dbc
-from gui.utils import create_dropdown, create_date_picker, create_button_with_loading, create_slider
+from gui.utils import create_dropdown, create_date_picker, create_button_with_loading, create_slider, create_divider
 
 # Define the layout here
 def get_analytics_layout(names):
     layout = html.Div([
         dbc.Container([
             get_title(),
+            create_divider(),
             identify_stat_and_mr(names),
+            create_divider(),
             cluster_tickers(),
+            create_divider(),
             pair_identification(),
-            hedging_ratio(names)
+            create_divider(),
+            hedging_ratio(names),
+            create_divider()
         ], style={'width': '90%', 'max-width': 'none'}),
     ])
     return layout
 
 
 def get_title():
-    return dbc.Row(dbc.Col(html.H1("Financial Analysis Dashboard")), style={'margin-bottom': '20px', 'padding-top': "8%"})
+    return dbc.Row(dbc.Col(html.H1("Financial Analysis Dashboard")), style={'padding-top': "8%"})
 
 def identify_stat_and_mr(names):
     title = dbc.Row(dbc.Col(html.H2("Identify Stationary & Mean-Reverting Series")), style={'margin-bottom': '20px'})
     
     input_ = dbc.Row([
-        dbc.Col(create_dropdown('ticker-dropdown-1', names, ['EA', 'MD']), width=4),
+        dbc.Col(create_dropdown('ticker-dropdown-1', names, ["CDMO", "GOLF"]), width=4),
         dbc.Col(create_date_picker('my-date-picker-range-1'), width="auto"),
         dbc.Col(
             dbc.Button("Submit", id="submit-button-1", color="primary"),
@@ -51,11 +56,12 @@ def cluster_tickers():
         dbc.Col(dcc.Dropdown(
                 id='automatic-dropdown-1',
                 options=[
-                    {'label': 'Sector', 'value': 'Sector', 'search': 'Sector'},
-                    {'label': 'Industry', 'value': 'Industry', 'search': 'Industry'},
+                    {'label': 'Sector', 'value': 'Sector'},
+                    {'label': 'Industry', 'value': 'Industry'},
                    #{'label': 'Market Cap', 'value': 'Market Cap', 'search': 'Market Cap'},
-                    {'label': 'SOM', 'value': 'SOM', 'search': 'SOM Machine Learning Clustering Self Ordering Map'},
-                    {'label': 'Random', 'value': 'Random', 'search': 'Random'}
+                    {'label': 'SOM', 'value': 'SOM'},
+                    {'label': 'Market Cap', 'value': 'Market Cap'},
+
                 ],
                 value='Industry',
                 multi=False,
@@ -65,8 +71,8 @@ def cluster_tickers():
         dbc.Col(dcc.Dropdown(
                 id='average-method-choice',
                 options = [
-                    {'label': 'Mean', 'value': 'Mean', 'search': 'Mean'},
-                    {'label': 'Barycenters', 'value': 'Barycenters', 'search': 'Barycenters'}
+                    {'label': 'Mean', 'value': 'Mean'},
+                    {'label': 'Barycenters', 'value': 'Barycenters'}
                 ],
                 multi=False,
                 value='Mean'
@@ -74,6 +80,14 @@ def cluster_tickers():
         dbc.Col(dcc.Dropdown(
             id='dependent-dropdown',
             options=[],
+        ), width=2),
+        dbc.Col(dcc.Dropdown(
+            id='groupby-dropdown',
+            options=[
+                {'label': 'None', 'value': 'None'},
+                {'label': 'Sector', 'value': 'sector'},
+                {'label': 'Market Cap', 'value': 'market_cap'},
+                ],
         ), width=2),
         dbc.Col(
             dbc.Button("Plot", id="submit-button-4", color="primary"),
@@ -105,7 +119,12 @@ def pair_identification():
         dbc.Col([dcc.Dropdown(
             id = 'cluster-dropdown',
             options = [],
-            placeholder = 'Select a computed cluster'
+            placeholder = 'Select a computed cluster',
+            style={
+                'height': '40px', 
+                'font-size': "90%",
+                'min-height': '1px',
+                }
         )], width=4),
         dbc.Col([dcc.Dropdown(
             id = 'cluster-selection',
@@ -120,13 +139,6 @@ def pair_identification():
         dbc.Col(html.Div(id='pairs-success', children=''))
     ], style={'margin-bottom': '10px'})
 
-    interim = dbc.Row([
-                dbc.Col([
-                    dbc.Progress(id='loading-bar', value=0, max=100, style={'width': '100%'}),
-                    html.Div(id='time-taken', children='Time taken: 0s'),
-                    html.Div(id='time-remaining', children='Time remaining: 0s')
-                ], width=12)
-            ], style={'margin-bottom': '20px'})
 
     load_res = dbc.Row([
         dbc.Col(dbc.Button(
@@ -137,10 +149,14 @@ def pair_identification():
         dbc.Col([dcc.Dropdown(
             id = 'pairs-dropdown',
             options = [],
-            placeholder = 'Select...'
+            placeholder = 'Select...',
+            className='custom-dropdown',
+            style={
+                'font-size': "70%",
+                }
         )], width=2),
         create_slider('slider-K', 10, 50, 1, 14),
-        create_slider('slider-adf', 0, 1, 0.01, 1/3),
+        create_slider('slider-mr', 0, 1, 0.01, 1/3),
         create_slider('slider-hurst', 0, 1, 0.01, 1/3),
         create_slider('slider-coint', 0, 1, 0.01, 1/3),
         dbc.Col(dbc.Button(
@@ -159,14 +175,14 @@ def pair_identification():
             ], width=4)
     ], style={'margin-bottom': '20px'})
 
-    return html.Div([title, input_, interim, load_res, res])
+    return html.Div([title, input_, load_res, res])
 
 
 def hedging_ratio(names):
     title = dbc.Row(dbc.Col(html.H2("Compute Hedging Ratio")), style={'margin-bottom': '20px'})
     
     input_ = dbc.Row([
-            dbc.Col(create_dropdown('ticker-dropdown-2', names, ['EA', 'MD']), width=4),
+            dbc.Col(create_dropdown('ticker-dropdown-2', names, ["CDMO", "GOLF"]), width=4),
             dbc.Col(create_date_picker('my-date-picker-range-2'), width="auto"),
             dbc.Col(
                 dbc.Button("Submit", id="submit-button-2", color="primary"),

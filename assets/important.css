@@ -67,3 +67,7 @@
 .sidebar-open #sidebar-links {
     opacity: 1;
 }
+
+.custom-dropdown .Select-option {
+    font-size: 70%;
+}

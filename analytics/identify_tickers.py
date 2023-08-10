@@ -1,10 +1,10 @@
-from analytics_module.time_series import TimeSeries
-from analytics_module.pair_analysis import CointegrationTest
+from analytics.time_series import TimeSeries
+from analytics.regression import CointegrationTest
 from tqdm import tqdm
 
 
 class IdentifyCandidates:
-    def __init__(self, ticker_pairs, time_series_data_frame, max_lag=None, hurst_cutoff=0.5, adf_cutoff=0.01, coint_cutoff=0.01, mongodb_url="mongodb://localhost:27017/", method="random"):
+    def __init__(self, ticker_pairs, time_series_data_frame, max_lag=None, hurst_cutoff=0.5, adf_cutoff=0.01, coint_cutoff=0.01):
 
         self.ticker_pairs = ticker_pairs
         self.df = time_series_data_frame

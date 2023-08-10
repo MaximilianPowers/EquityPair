@@ -1,15 +1,14 @@
 import pandas as pd
 from pymongo import MongoClient
 from datetime import datetime, timedelta
-from data_loader.data_loader import SetStockData
-from tqdm import tqdm
-s = SetStockData()
 
 class GetStockData:
     """
     Interface to retrieve data from MongoDB database.
     """
-    def __init__(self, db_name = "equity_data", collection_name="price_data",  date_collection_name = "date_data", meta_collection_name="ticker_data", mongo_url="mongodb://localhost:27017/"):
+    def __init__(self, data_setter, db_name = "equity_data", collection_name="price_data",  date_collection_name = "date_data", meta_collection_name="ticker_data", mongo_url="mongodb://localhost:27017/"):
+        self.data_setter = data_setter
+        
         self.client = MongoClient(mongo_url)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
@@ -62,14 +61,14 @@ class GetStockData:
             start_date = cur_earliest_date_dt
         else:
             if self.start_date_dt < cur_earliest_date_dt:
-                s.update_single_data(ticker, self.start_date, cur_earliest_date)
+                self.data_setter.update_single_data(ticker, self.start_date, cur_earliest_date)
             start_date = self.start_date_dt
 
         if self.end_date_dt is  None:
             end_date = cur_latest_date_dt
         else:
             if self.end_date_dt > cur_latest_date_dt:
-                s.update_single_data(ticker, cur_latest_date, self.end_date)
+                self.data_setter.update_single_data(ticker, cur_latest_date, self.end_date)
             end_date = self.end_date_dt
         
         pipeline = [

@@ -8,3 +8,4 @@ def safe_round(number, d=2):
             return np.round(number, d)
     else:
         return 0
+    

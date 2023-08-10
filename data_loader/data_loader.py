@@ -1,7 +1,7 @@
-import json
 from pymongo import MongoClient, errors, ASCENDING
 from yfinance import download, Ticker
 from datetime import datetime
+from tqdm import tqdm
 
 class SetStockData:
     """
@@ -36,18 +36,22 @@ class SetStockData:
             info = Ticker(ticker).info
         except:
             info = None
-        self.meta_collection.insert_one({
+        query = {"_id": ticker} # or whatever your _id value is
+        update = {"$set": {
             "_id": ticker,
             "info": info
-        })
-
+        }} # replace 'your_document' with the actual document you want to insert/update
+        self.meta_collection.update_one(query, update, upsert=True)
 
     def initialise_date_range(self, ticker, start_date, end_date):
-        self.date_collection.insert_one({
+
+        query = {"_id": ticker} # or whatever your _id value is
+        update = {"$set": {
             "_id": ticker,
             "earliest_date": start_date,
             "latest_date": end_date
-        })
+        }} # replace 'your_document' with the actual document you want to insert/update
+        self.date_collection.update_one(query, update, upsert=True)
 
     def get_data_date_range(self, ticker):
         meta = self.date_collection.find_one({"_id": ticker})
@@ -57,7 +61,6 @@ class SetStockData:
             return None, None
     
     def download_data(self, ticker, start_date, end_date):
-        print('Happening here')
         data = download(ticker, start=start_date, end=end_date)
         if data.empty:
             print(f"No new data to download for {ticker}")
@@ -73,8 +76,6 @@ class SetStockData:
         last_data_date_dt = self.str_to_date(last_data_date)
 
         if earliest_data_date is None and last_data_date is None:
-            print('None values')
-
             data = self.download_data(ticker, self.start_date, self.end_date)
             if data is not None:
                 self.collection.update_one(
@@ -93,7 +94,6 @@ class SetStockData:
             return
 
         if self.start_date_dt < earliest_data_date_dt:
-            print('Start before current start')
             data = self.download_data(ticker, self.start_date, self.date_to_str(earliest_data_date_dt))
             if data is not None:
                 self.collection.update_one(
@@ -118,8 +118,6 @@ class SetStockData:
                 )
 
         if last_data_date_dt < self.end_date_dt:
-            print('End after current end')
-
             data = self.download_data(ticker, self.date_to_str(last_data_date_dt), self.end_date)
             if data is not None:
                 self.collection.update_one(
@@ -166,12 +164,12 @@ class SetStockData:
         for a fixed date range regardless of whether there is data already in the database. We call this function at the initialisation to ensure we don't
         need to wait too long to start running operations. The pre-set date range is 2021-08-01 to 2023-08-01.
         """
-        print("Happening here???")
         data = download(tickers, start=start_date, end=end_date, group_by="ticker")
         data = data.dropna(axis=1, how='all')
 
         tickers = set([ticker for ticker,_ in data.columns])
-        for ticker in tickers:
+        print("Inserting bulk data into MongoDB... This may take a while.")
+        for ticker in tqdm(tickers):
             ticker_data = data[ticker]
             closing_prices = [{"date": index.to_pydatetime(), "price": row["Close"]} for index, row in ticker_data.iterrows()]
 
@@ -202,15 +200,3 @@ class SetStockData:
             return None
         return date.strftime("%Y-%m-%d")
 
-if __name__ == "__main__":
-    with open('./data_loader/tickers.json') as f:
-        tickers = json.load(f)
-    full_list = []
-    for key in tickers.keys():
-        full_list.extend(tickers[key])
-    full_list = list(set(full_list))
-    s = SetStockData()
-    start_date = "2019-07-01"
-    end_date = "2023-07-01"
-
-    s.bulk_insert_data(full_list, start_date, end_date)

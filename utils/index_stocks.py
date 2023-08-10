@@ -1,34 +1,22 @@
-from bs4 import BeautifulSoup
-import requests
 import json
+import pandas as pd
 
 def get_tickers_snp():
     """
     Get the list of tickers from Wikipedia of russel 2000
     """
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    page = requests.get(url)
-    soup = BeautifulSoup(page.content, "html.parser")
-    table = soup.find(id="constituents")
-    table_rows = table.find_all("tr")
-    tickers = []
-    for tr in table_rows:
-        td = tr.find_all("td")
-        row = [i.text for i in td]
-        if row:
-            tickers.append(row[0][:-2])
-    return tickers
+    sp500 = pd.read_html(url)
+    sp500_list = sp500[0]['Symbol']
+    return sp500_list
 
 def get_tickers_russel():
     """
     Get the list of tickers from Wikipedia
     """     
 
-    with open("./data_loader/russell_2000.html", "r") as f:
-        page = f.read()
-    soup = BeautifulSoup(page, "html.parser")
-
-    tickers = [i.text for i in soup.find_all("div", {"class":"ticker-area"})]
+    df = pd.read_excel("./utils/russell_2000.xlsx")
+    tickers = df["Ticker"].tolist()
     return tickers
 
 def get_tickers_nasdaq():
@@ -36,27 +24,24 @@ def get_tickers_nasdaq():
     Get the list of tickers from Wikipedia
     """
     url = "https://en.wikipedia.org/wiki/NASDAQ-100"
-    page = requests.get(url)
-    soup = BeautifulSoup(page.content, "html.parser")
-    table = soup.find(id="constituents")
-    table_rows = table.find_all("tr")
-    tickers = []
-    for tr in table_rows:
-        td = tr.find_all("td")
-        row = [i.text for i in td]
-        if row:
-            tickers.append(row[1])
-    return tickers
+    nas100 = pd.read_html(url)
+    nas100_list = nas100[4]['Ticker']
+    return nas100_list
 
-nas_tickers = get_tickers_nasdaq()
-snp_tickers = get_tickers_snp()
-russel_tickers = get_tickers_russel()
+def gen_ticker_dict(ticker_path="./utils/tickers.json"):
+    nas_tickers = get_tickers_nasdaq()
+    snp_tickers = get_tickers_snp()
+    russel_tickers = get_tickers_russel()
 
-results = {
-    "nasdaq": nas_tickers,
-    "snp": snp_tickers,
-    "russel": russel_tickers,
-    "exchange": ["^GSPC", "^NDX", "^RUT"] 
-}
+    nas_tickers = [ticker for ticker in nas_tickers if ticker is not None and ticker != ""]
+    snp_tickers = [ticker for ticker in snp_tickers if ticker is not None and ticker != ""]
+    russel_tickers = [ticker for ticker in russel_tickers if ticker is not None and ticker != ""]
+    results = {
+        "nasdaq": nas_tickers,
+        "snp": snp_tickers,
+        "russel": russel_tickers,
+        "exchange": ["^GSPC", "^NDX", "^RUT"] 
+    }
 
-json.dump(results, open("./data_loader/tickers.json", "w"))
+    json.dump(results, open(ticker_path, "w"))
+

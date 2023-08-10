@@ -1,7 +1,7 @@
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 from datetime import datetime
-import json
+
 def create_dropdown(id, names, default_values):
     dropdown= dcc.Dropdown(
         id=id,
@@ -19,7 +19,7 @@ def create_date_picker(id):
         max_date_allowed=datetime.today(),
         initial_visible_month=datetime.today(),
         start_date=datetime(2020, 6, 1),
-        end_date=datetime(2023, 7, 1),
+        end_date=datetime(2022, 6, 1),
         style={'margin-bottom': '20px'}
     )
 
@@ -92,3 +92,12 @@ def get_all_clustering_results(misc_connect, n=0):
         return options
     else:
         return [] 
+    
+
+def create_divider():
+    return html.Hr(style={
+                'borderTop': '1px solid #7B9EB0', 
+                'width': '100%',                   
+                'margin-top': '50px',             
+                'margin-bottom': '75px'           
+            })

@@ -1,6 +1,7 @@
-from finance.single_pair_strat.strategy import Strategy
+from finance.strategy import Strategy
 from numpy import isnan, sqrt
-from analytics_module.pair_analysis import KalmanRegression, OLSRegression
+from analytics.regression import KalmanRegression, OLSRegression
+
 # SET DEFAULT BUY/SELL CONDITION HYPERPARAMETERS
 BASE_BUY_SIGMA = 1 
 BASE_SELL_SIGMA_LOW = 0.5
@@ -16,8 +17,8 @@ class OnlineRegressionStrategy(Strategy):
     def __init__(self, method, capital, ticker_1, ticker_2, start_training_date, end_training_date, start_date, end_date, hyperparameters = {}, time_series = None):
         if method not in ["KalmanRegression", "OLSRegression"]:
             raise ValueError("method must be either KalmanRegression or OLSRegression.")
-        self.method_name = method
         super().__init__(capital, ticker_1, ticker_2, start_training_date, end_training_date, start_date, end_date, hyperparameters, time_series)
+        self.method_name = method        
         self.set_hyperparameters(hyperparameters)
 
         self.ts = self.ts.dropna()
@@ -60,7 +61,8 @@ class OnlineRegressionStrategy(Strategy):
 
     def train_model(self):
         self.method.run()
-        tmp = self.time_series_2 - self.method.cur_beta*self.time_series_1  - self.method.cur_alpha
+        train_data = self.ts[self.ts["Mode"] == "Train"][[self.ticker_1, self.ticker_2]].values
+        tmp = self.method.get_batch_spread(train_data)
         self.mu_hist = tmp.mean()
         self.var_hist = tmp.var()
         self.n = len(tmp)
@@ -68,7 +70,7 @@ class OnlineRegressionStrategy(Strategy):
         self.threshold_normal_buy, self.threshold_swapped_buy = self.compute_threshold(self.mu_hist, self.hyperparameters["buy_sigma"], std_dev)
         self.threshold_normal_sell_low, self.threshold_swapped_sell_low = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_low"], std_dev)
         self.threshold_normal_sell_high, self.threshold_swapped_sell_high = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_high"], std_dev)
-
+    
     def update_threshold(self, observation):
         # Update threshold with Welford's algorithm
         spread =self.method.get_spread(observation) # Calculate spread
@@ -82,7 +84,6 @@ class OnlineRegressionStrategy(Strategy):
         self.threshold_normal_buy, self.threshold_swapped_buy = self.compute_threshold(self.mu_hist, self.hyperparameters["buy_sigma"], std_dev)
         self.threshold_normal_sell_low, self.threshold_swapped_sell_low = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_low"], std_dev)
         self.threshold_normal_sell_high, self.threshold_swapped_sell_high = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_high"], std_dev)
-
     def update_model(self, observation):
         self.method.update(observation)
         self.update_threshold(observation)
@@ -120,16 +121,14 @@ class OnlineRegressionStrategy(Strategy):
 
                 if buy_1 or buy_2:
                     self.execute_trade(date, self.method.cur_beta)
-                    self.update_model(observation)
                     self.trade_open_date = date
-                    continue
             else:
                 sell = self.sell_condition(observation)
                 if sell:
                     self.exit_position(date)
                     self.trade_open_date = None
                     self.cur_pos = 0
-            self.portfolio.store_result(date)
+            self.portfolio.store_results(date)
             portfolio_value = self.portfolio.portfolio_value
             if portfolio_value < 0:
                 print("Portfolio value is negative. You're broken. Exiting.")
@@ -141,8 +140,6 @@ class OnlineRegressionStrategy(Strategy):
             self.exit_position(date)
             self.trade_open_date = None
             self.cur_pos = 0
-        if False:
-            self.portfolio.plot_portfolio()
 
 
     def buy_condition(self, observation):

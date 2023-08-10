@@ -1,18 +1,25 @@
 from dash.dependencies import Input, Output, State
-from gui.utils import date_handler
-from analytics_module.pair_analysis import KalmanRegression, OLSRegression, CointegrationTest
-from analytics_module.cluster_tickers import ClusterTickers
-from analytics_module.identify_tickers import IdentifyCandidates, ScoreCandidates
-import plotly.graph_objects as go
-import numpy as np
-from dash import dcc, html, dash_table
-import pandas as pd
-from utils.utils import safe_round
+from dash import html, dash_table
 from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
+from analytics.regression import KalmanRegression, OLSRegression, CointegrationTest
+from analytics.cluster_tickers import ClusterTickers
+from analytics.identify_tickers import IdentifyCandidates, ScoreCandidates
+
+from data_loader.singleton import get_data_fetcher, get_misc_connect
+from gui.utils import date_handler
+from utils.utils import safe_round
+
+import numpy as np
+import pandas as pd
+
+data_fetcher = get_data_fetcher()
+misc_connect = get_misc_connect()
 
 global cluster_method
 
-def register_analytics_callbacks(app, data_fetcher, misc_connect):
+def register_analytics_callbacks(app):
     global cluster_method
     cluster_method = None
     @app.callback(
@@ -90,27 +97,27 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
          Output('bar-plot-1', 'figure')],
         [Input('submit-button-4', 'n_clicks'), 
          Input('average-method-choice', 'value'),
-         Input('dependent-dropdown', 'value')],
-        [
-         ]
+         Input('dependent-dropdown', 'value'),
+         Input('groupby-dropdown', 'value')],
     )
-    def plot_clusters(n, avg_method, cluster):
+    def plot_clusters(n, avg_method, cluster, groupby):
         global cluster_method
-        if cluster_method is not None and cluster is not None and n is not None and n != 0:
-            if cluster_method.method == "Random":
-                fig = go.Figure()
-                fig.update_layout(
-                    width=25 * 20,  # Width in pixels (25 units * 20 pixels per unit)
-                    height=5 * 20,  # Height in pixels (5 units * 20 pixels per unit)
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    showlegend=False,
-                    plot_bgcolor='white',
-                    margin=dict(l=0, r=0, b=0, t=0)
-                )
-                return fig, fig
+        if cluster_method is not None and cluster is not None and n is not None and n != 0 and cluster_method.clusters is not None:
             fig_1 = cluster_method.plot_time_series_clusters(avg_method, cluster)
-            fig_2 = cluster_method.plot_bar()
+            if groupby == 'None':
+                fig_2 = cluster_method.plot_bar()
+            elif groupby == 'sector':
+                cluster_method_copy = ClusterTickers(cluster_method.tickers, "Sector", cluster_method.start_date, cluster_method.end_date, serialise=True)
+                cluster_method_copy._serialise(cluster_method.df)
+                cluster_method_copy.get_candidates()
+                fig_2 = cluster_method.plot_bar(cluster_method_copy.clusters)
+            elif groupby == 'market_cap':
+                cluster_method_copy = ClusterTickers(cluster_method.tickers, "Market Cap", cluster_method.start_date, cluster_method.end_date, serialise=True)
+                cluster_method_copy._serialise(cluster_method.df)
+                cluster_method_copy.get_candidates()
+                fig_2 = cluster_method.plot_bar(cluster_method_copy.clusters)
+
+            
             fig_1.update_layout(margin=dict(l=0, r=0, t=0, b=0))
             fig_2.update_layout(margin=dict(l=0, r=0, t=0, b=0))
 
@@ -163,10 +170,31 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
         [State('ticker-dropdown-1', 'value')]
     )
     def update_numerical_data(n, tickers):
-        
-        # Fetch data and calculate metrics
-        # ...
-        # Test for stationarity
+        if n is None or n == 0 or tickers is None or len(tickers) == 0:
+            return dash_table.DataTable(
+            data=None,
+            columns=[{'name': 'Ticker', 'id': 'Ticker'},
+                     {'name': 'Market Cap/B', 'id': 'Market Cap/B'},
+                     {'name': 'Sector', 'id': 'Sector'},
+                     {'name': 'Industry', 'id': 'Industry'},
+                     {'name': 'Beta', 'id': 'Beta'}],
+            style_cell={
+                'textAlign': 'left',
+                'overflow': 'hidden', # this line will keep the text from spilling out of the cell
+                'textOverflow': 'ellipsis', # this line will truncate the text with an ellipsis
+                'maxWidth': 0, # this line will allow the text to break across lines
+                'whiteSpace': 'normal' # this line will allow the text to break across lines
+                
+            },
+            style_data_conditional=[{'if': {'column_id': 'column 1'}, 'textOverflow': 'ellipsis'}],
+            style_table={
+                'overflowX': 'scroll', # this line will make the table horizontally scrollable
+            },
+            css=[{
+                'selector': '.dash-cell div.dash-cell-value',
+                'rule': 'display: inline; white-space: inherit; overflow: inherit; text-overflow: inherit;'
+            }]
+            )
 
         data = []
         n = max(0, -7+len(tickers))
@@ -212,12 +240,12 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
         [Input('submit-button-5', 'n_clicks')],
         [State('cluster-dropdown', 'value'),
          State('cluster-selection', 'value'),
-         State('slider-adf', 'value'),
+         State('slider-mr', 'value'),
          State('slider-hurst', 'value'),
          State('slider-coint', 'value'),
          ]
     )
-    def identify_pairs(n, clusters, cluster, adf, hurst, coint):
+    def identify_pairs(n, clusters, cluster, mr, hurst, coint):
         if n is not None and n != 0:
             if cluster is not None:
                 method, start_date, end_date = clusters.split(':')
@@ -282,11 +310,11 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
          [
              State('slider-K', 'value'),
              State('slider-hurst', 'value'),
-             State('slider-adf', 'value'),
+             State('slider-mr', 'value'),
              State('slider-coint', 'value'),
           ]
     )
-    def get_pairs_table(n, str_, K, hurst, adf, coint):
+    def get_pairs_table(n, str_, K, hurst, mr, coint):
         if str_ is None:
             fig = go.Figure()
             fig.update_layout(xaxis_title="Date", yaxis_title="Price", margin=dict(l=0, r=0, t=36, b=0))
@@ -294,7 +322,7 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
         method, cluster, start_date, end_date = str_.split(':')
         cursor = misc_connect.get_pairs_results(method, cluster, start_date, end_date)
         res = dict(cursor)
-        S = ScoreCandidates(hurst, adf, coint, res)
+        S = ScoreCandidates(hurst, mr, coint, res)
 
         final_table = []
         tickers = S.get_top_candidates()
@@ -306,10 +334,10 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
             t2_market_cap = safe_round(data_fetcher.get_ticker_field_info(ticker_2, 'marketCap'))/1_000_000_000
             coint_val = safe_round(res[key]['coint'], 3)
             hurst_val = safe_round(res[key]['stationary'], 3)
-            adf_val = safe_round(res[key]['mean_reversion'], 3)
+            mr_val = safe_round(res[key]['mean_reversion'], 3)
 
-            s_ = hurst+adf+coint
-            total = safe_round((coint*coint_val + hurst*hurst_val + adf*adf_val)/s_, 3)
+            s_ = hurst+mr+coint
+            total = safe_round((coint*coint_val + hurst*hurst_val + mr*mr_val)/s_, 3)
             final_table.append({
                     'Ticker 1': ticker_1,
                     'Ticker 2': ticker_2,
@@ -317,9 +345,9 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
                     '\u03B2 2': t2_beta,
                     'Market Cap 1/B': t1_market_cap,
                     'Market Cap 2/B': t2_market_cap,
-                    'Cointegration': coint_val,
+                    'Coint': coint_val,
                     'Hurst': hurst_val,
-                    'ADF': adf_val,
+                    'MR': mr_val,
                     'Total': total
                 })
             
@@ -332,8 +360,8 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
         # Define quantiles for the columns
         quantiles = {
             'Hurst': np.linspace(0, 1, 11),
-            'ADF': np.linspace(0, 1, 11),
-            'Cointegration': np.linspace(0, 1, 11),
+            'MR': np.linspace(0, 1, 11),
+            'Coint': np.linspace(0, 1, 11),
             'Total': np.linspace(0, 1, 11),
             '\u03B2': np.linspace(beta_values.min(), beta_values.max(), 11),
             'Market Cap': np.linspace(market_cap_values.min(), market_cap_values.max(), 11),
@@ -345,7 +373,7 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
 
         # Create style_data_conditional
         style_data_conditional = []
-        columns_to_style = ['\u03B2 1', '\u03B2 2', 'Market Cap 1/B', 'Market Cap 2/B', 'Cointegration', 'Hurst', 'ADF', 'Total']
+        columns_to_style = ['\u03B2 1', '\u03B2 2', 'Market Cap 1/B', 'Market Cap 2/B', 'Coint', 'Hurst', 'MR', 'Total']
         for column in columns_to_style:
             if column in ['\u03B2 1', '\u03B2 2']:
                 quants = quantiles['\u03B2']
@@ -372,7 +400,7 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
         )
         nbins = 10
         # Create a 3x2 grid of subplots
-        fig = make_subplots(rows=3, cols=2, subplot_titles=['\u03B2', 'Market Cap', 'Cointegration', 'Hurst', 'ADF', 'Total'])
+        fig = make_subplots(rows=3, cols=2, subplot_titles=['\u03B2', 'Market Cap', 'Cointegration', 'Hurst', 'MR', 'Total'])
 
         # Add the histogram for beta
         fig.add_trace(
@@ -388,7 +416,7 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
 
         # Add the histogram for cointegration
         fig.add_trace(
-            go.Histogram(x=df_fin['Cointegration'], nbinsx=nbins, name='Cointegration'),
+            go.Histogram(x=df_fin['Coint'], nbinsx=nbins, name='Cointegration'),
             row=2, col=1
         )
 
@@ -398,9 +426,9 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
             row=2, col=2
         )
 
-        # Add the histogram for ADF
+        # Add the histogram for MR
         fig.add_trace(
-            go.Histogram(x=df_fin['ADF'], nbinsx=nbins, name='ADF'),
+            go.Histogram(x=df_fin['MR'], nbinsx=nbins, name='MR'),
             row=3, col=1
         )
 
@@ -522,11 +550,11 @@ def register_analytics_callbacks(app, data_fetcher, misc_connect):
         return f'Hurst: {value:.2f}' 
 
     @app.callback(
-    Output('slider-adf-value', 'children'),
-        Input('slider-adf', 'value')
+    Output('slider-mr-value', 'children'),
+        Input('slider-mr', 'value')
     )
-    def update_adf_value(value):
-        return f'ADF: {value:.2f}' 
+    def update_mr_value(value):
+        return f'MR: {value:.2f}' 
     
     @app.callback(
     Output('slider-K-value', 'children'),

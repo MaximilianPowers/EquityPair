@@ -1,15 +1,13 @@
 # TEST TO RUN THE STRATEGY
 
 import pandas as pd
-from finance.single_pair_strat.online_strategy import OnlineRegressionStrategy
-from finance.single_pair_strat.kalman import KalmanStrategy
-from finance.single_pair_strat.ols import OLSStrategy
+from finance.online_strategy import OnlineRegressionStrategy
 import json
 import numpy as np
 import matplotlib.pyplot as plt
 from data_loader.misc_connect import MongoConnect
 from argparse import ArgumentParser
-
+import os
 parser = ArgumentParser()
 parser.add_argument("--ticker_1", type=str, default="MD")
 parser.add_argument("--ticker_2", type=str, default="EA")
@@ -20,6 +18,11 @@ parser.add_argument("--end_trading_date", type=str, default="2023-06-02")
 parser.add_argument("--method", type=str, default="KalmanRegression")
 args = parser.parse_args()
 
+FIG_DIR = "{FIG_DIR}"
+
+if not os.path.exists(FIG_DIR):
+    os.makedirs(FIG_DIR)
+    
 m = MongoConnect()
 capital  = 1_000_000
 ticker_1 = args.ticker_1
@@ -91,7 +94,7 @@ for key in list(strategy.portfolio.closed_trades.keys()):
 # Remove x ticks:
 ax.set_xticks([])
 
-fig.savefig(f"./finance/figs/res_1_{method_name.lower()}.png")
+fig.savefig(f"{FIG_DIR}/res_1_{method_name.lower()}.png")
 
 
 df = pd.read_json("res_1.json").transpose()
@@ -101,7 +104,7 @@ ax.plot(np.cumsum(df["pnl"].values))
 ax.set_title("PnL over time")
 ax.set_xlabel("Time")
 ax.set_ylabel("PnL")
-fig.savefig(f"./finance/figs/res_2_{method_name.lower()}.png")
+fig.savefig(f"{FIG_DIR}/res_2_{method_name.lower()}.png")
 
 
 res = np.array(strategy.store_res)
@@ -116,7 +119,7 @@ ax.set_title(f"{method_name} Regression Trading Strategy")
 ax.set_xlabel("Time")
 # Set legend position
 ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
-fig.savefig(f"./finance/figs/res_3_{method_name.lower()}.png")
+fig.savefig(f"{FIG_DIR}/res_3_{method_name.lower()}.png")
 
 fig, ax = plt.subplots()
 ax.plot(res[:, -2], label="Alpha")
@@ -126,5 +129,5 @@ ax.set_title(f"{method_name} Regression Trading Strategy")
 ax.set_xlabel("Time")
 # Set legend position
 ax.legend(loc='upper right', bbox_to_anchor=(1.05, 1))
-fig.savefig(f"./finance/figs/res_4_{method_name.lower()}.png")
+fig.savefig(f"{FIG_DIR}/res_4_{method_name.lower()}.png")
 

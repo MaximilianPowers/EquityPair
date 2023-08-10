@@ -1,5 +1,9 @@
 from finance.portfolio import Portfolio
+
+
 MAX_TOL = .4
+
+
 class SinglePairPortfolio(Portfolio):
     """
     A trading strategy that executes trades based on signals
@@ -40,8 +44,8 @@ class SinglePairPortfolio(Portfolio):
         short_proceeds = short_quantity * self.records[date][short_ticker]
 
         # Update the portfolio quantities
-        self.portfolio[long_ticker] = self.portfolio.get(long_ticker, 0) + long_quantity
-        self.portfolio[short_ticker] = self.portfolio.get(short_ticker, 0) - short_quantity
+        self.cur_portfolio[long_ticker] = self.cur_portfolio.get(long_ticker, 0) + long_quantity
+        self.cur_portfolio[short_ticker] = self.cur_portfolio.get(short_ticker, 0) - short_quantity
 
         # Update the capital by subtracting the long cost and adding the short proceeds
         self.capital -= long_cost - short_proceeds
@@ -73,8 +77,8 @@ class SinglePairPortfolio(Portfolio):
         self.capital += long_value_exit - short_value_exit
 
         # Update the portfolio quantities
-        self.portfolio[trade["long_ticker"]] -= trade["long_quantity"]
-        self.portfolio[trade["short_ticker"]] += trade["short_quantity"]
+        self.cur_portfolio[trade["long_ticker"]] -= trade["long_quantity"]
+        self.cur_portfolio[trade["short_ticker"]] += trade["short_quantity"]
         if self.verbose:
             print("Capital after sold stock:")
             print(f"Long {trade['long_ticker']}: {trade['long_quantity'] * exit_price_long}")

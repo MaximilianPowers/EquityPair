@@ -1,15 +1,20 @@
 from abc import ABC, abstractmethod
-from data_loader.get_data import GetStockData
-from finance.single_pair_strat.portfolio_single import SinglePairPortfolio
+
+from data_loader.singleton import get_data_fetcher
+from analytics.regression import CointegrationTest
+from finance.portfolio_single import SinglePairPortfolio
+
+from uuid import uuid4
 from datetime import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from analytics_module.pair_analysis import CointegrationTest
+
+data_fetcher = get_data_fetcher()
 
 class Strategy(ABC):
     def __init__(self, capital, ticker_1, ticker_2, start_training_date, end_training_date, start_date, end_date, hyperparameters = {}, ts=None):        
-
+        self.method_name = None # Must be set by child class
         self.ticker_1 = ticker_1
         self.ticker_2 = ticker_2
         self.cur_pos = 0 # 0 if no position, 1 if lng ticker_1 and short ticker 2, -1 if short ticker_1 and lng ticker_2
@@ -34,7 +39,6 @@ class Strategy(ABC):
         if ts is not None:
             self.ts = ts
         else:
-            self.g = GetStockData()
             self.store_ticker_data()
 
 
@@ -56,9 +60,9 @@ class Strategy(ABC):
         """
         Stores the time series data for the two tickers.
         """
-        train_ticker_data = self.g.collate_dataset([self.ticker_1, self.ticker_2], self.start_training_date, self.end_training_date).pivot(columns='ticker', values='close')
+        train_ticker_data = data_fetcher.collate_dataset([self.ticker_1, self.ticker_2], self.start_training_date, self.end_training_date).pivot(columns='ticker', values='close')
         train_ticker_data["Mode"] = "Train"
-        trade_ticker_data = self.g.collate_dataset([self.ticker_1, self.ticker_2], self.start_date, self.end_date).pivot(columns='ticker', values='close')
+        trade_ticker_data = data_fetcher.collate_dataset([self.ticker_1, self.ticker_2], self.start_date, self.end_date).pivot(columns='ticker', values='close')
         trade_ticker_data["Mode"] = "Trade"
         self.ts = pd.concat([train_ticker_data, trade_ticker_data])
         self.ts.index = self.ts.index.strftime('%Y-%m-%d').tolist()
@@ -83,11 +87,18 @@ class Strategy(ABC):
 
     def plot_spread(self, labels):
         res = np.array(self.store_res)
-        if res.shape[0] != len(labels):
+        
+        if res.shape[1] != len(labels):
             raise ValueError(f"Number of labels must match number of columns in results ({res.shape[0]}).")
         fig, ax = plt.subplots()
-        for i in range(res.shape[1]):
+        for i in range(res.shape[1])[-1:]:
             plt.plot(res[:, i], label=labels[i])
+        ts1 = self.ts[self.ts["Mode"] == "Trade"][self.ticker_1]
+        ts1 = (ts1 - ts1.mean()) / ts1.std()
+        ts2 = self.ts[self.ts["Mode"] == "Trade"][self.ticker_2]
+        ts2 = (ts2 - ts2.mean()) / ts2.std()
+        #plt.plot(ts1, label=self.ticker_1)
+        #plt.plot(ts2, label=self.ticker_2)
         plt.legend()
         ax.set_title("Kalman Filter Trading Strategy")
         ax.set_xlabel("Time")
@@ -111,7 +122,7 @@ class Strategy(ABC):
                 continue
             coint.update(observation)
             coint_p_value.append(coint.cur_adf)
-            coint_spread.append(coint.spread())
+            coint_spread.append(coint.get_spread())
             dates.append(observations.index[index])
         return dates, coint_spread, coint_p_value
 
@@ -119,9 +130,12 @@ class Strategy(ABC):
         """
         Given a MongoDB connection, posts the history of trades to the database.
         """
-        m.post_strategy_results(
-            self.ticker_1, self.ticker_2, self.start_training_date, self.end_training_date, self.start_date, self.end_date,
-            self.hyperparameters, self.portfolio.closed_trades
+        uuid = uuid4().__str__()
+        self.portfolio._set_return_series()
+        results = self.portfolio._post_strategy_results()
+        m.post_strategy(
+            self.ticker_1, self.ticker_2, self.method_name, self.start_training_date, self.end_training_date, self.start_date, self.end_date,
+            self.hyperparameters, uuid, results, self.portfolio.closed_trades
         )
 
     @abstractmethod
