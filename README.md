@@ -1,5 +1,4 @@
 <h1> Equity Pairs Trading GUI </h1>
----------------------
 
 This is a Dash GUI for exploring Equity Pair trading on a pool of candidates from the 
 S&P 500, NASDAQ 100 and Russell 2000 tickers. 
@@ -21,7 +20,7 @@ When running this code for the first time, or if you've wiped the MongoDB databa
   --mongo_port 27017
                         Port to connect to MongoDB.
   --db_name equity_data 
-                        Nmae of the database to add data to.
+                        Name of the database to add data to.
   --start_date "2019-07-01"
                         Start date to batch insert data from
   --end_date "2022-07-01"
