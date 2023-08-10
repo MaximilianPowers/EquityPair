@@ -2,7 +2,10 @@ from pymongo import MongoClient, errors, ASCENDING
 from yfinance import download, Ticker
 from datetime import datetime
 from tqdm import tqdm
+import os
 
+# Get the number of available processors
+available_processors = max(os.cpu_count(), 1)
 class SetStockData:
     """
     Class to download closing data from yfinance and writ to a MongoDB database.
@@ -164,7 +167,7 @@ class SetStockData:
         for a fixed date range regardless of whether there is data already in the database. We call this function at the initialisation to ensure we don't
         need to wait too long to start running operations. The pre-set date range is 2021-08-01 to 2023-08-01.
         """
-        data = download(tickers, start=start_date, end=end_date, group_by="ticker")
+        data = download(tickers, start=start_date, end=end_date, group_by="ticker", threads=False)
         data = data.dropna(axis=1, how='all')
 
         tickers = set([ticker for ticker,_ in data.columns])

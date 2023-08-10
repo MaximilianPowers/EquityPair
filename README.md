@@ -6,28 +6,22 @@ S&P 500, NASDAQ 100 and Russell 2000 tickers.
 
 ## Installation
 ---------------------
-Use the package manager [pip](https://pip.pypa.io/en/stable/) install the dependencies .
+Use the package manager [pip](https://pip.pypa.io/en/stable/) install the dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-This GUI uses MongoDB to store ticker data and record trading strategies, portfolios, etc. 
-
 ## Running the interface
 ---------------------
 
-All the code is centrally managed from `main.py`:
-optional arguments:
+When running this code for the first time, or if you've wiped the MongoDB database, it's recommend to run `setup.py` before running `main.py` as this will make the experience much smoother. It has the following arguments:
   --mongo_host localhost
                         Hostname of the MongoDB databse.
   --mongo_port 27017
                         Port to connect to MongoDB.
   --db_name equity_data 
                         Nmae of the database to add data to.
-  --load_data False
-                        Set this equal to `True` on the first run to batch insert
-                        ticker data. This will make the GUI experience much smoother.
   --start_date "2019-07-01"
                         Start date to batch insert data from
   --end_date "2022-07-01"
@@ -35,6 +29,15 @@ optional arguments:
   --ticker_path "./utils/ticker.json"
                         Path to store the 2323 found tickers (1780/2000 Russell, 
                         100/100 NASDAQ 100, 500/500 S&P 500)
+
+Once the data has been ingested by the MongoDB database, we can begin loading the Dash GUI `main.py`:
+optional arguments:
+  --mongo_host localhost
+                        Hostname of the MongoDB databse.
+  --mongo_port 27017
+                        Port to connect to MongoDB.
+  --db_name equity_data 
+                        Nmae of the database to add data to.
 
 The `main.py` file sets up the database connections and once set up, runs the
 `dashboard.py` file which is where the Dash interface is set up. 
@@ -117,15 +120,6 @@ On the bottom left we have the thresholding plot to monitor the evolution of the
 
 Firstly, we find the strategy we want to analyse via various techniques. Then given a risk free rate and target return, we plot the four metrics: sharpe, max drawdown, calmar and sortino. We also aggregate these strategies and store them to the left, displaying various metadata.
 
-##  Page
----------------------
-The first page you're directed to is a main page which is where we will do most of
-our investigation to identify which tickers are promising as candidates for an equity
-pair strategy. 
-```
-## Usage
----------------------
-Everything is managed from main.py. When running the 
 
 ```
 EquityPair

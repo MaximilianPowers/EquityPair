@@ -10,4 +10,5 @@ pymongo==4.4.1
 statsmodels==0.14.0
 tqdm==4.65.0
 tslearn==0.6.1
-yfinance==0.2.26
+yfinance==0.2.27
+openpyxl
