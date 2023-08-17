@@ -2,8 +2,8 @@ from argparse import ArgumentParser
 from data_loader.singleton import DatabaseConnection
 
 parser = ArgumentParser()
-parser.add_argument("--mongo_host", type=str, default="localhost")
-parser.add_argument("--mongo_port", type=int, default=27017)
+parser.add_argument("--mongo_url", type=str, default="mongodb://localhost:27017/")
+parser.add_argument("--db_name", type=str, default="equity_data")
 parser.add_argument("--start_date", type=str, default="2019-07-01")
 parser.add_argument("--end_date", type=str, default="2023-07-01")
 parser.add_argument("--ticker_path", type=str, default="./utils/tickers.json")
@@ -11,9 +11,9 @@ args = parser.parse_args()
 
 
 
-MONGO_URL = f"mongodb://{args.mongo_host}:{args.mongo_port}/"
+MONGO_URL = args.mongo_url
 
-connection = DatabaseConnection(MONGO_URL)
+connection = DatabaseConnection(mongo_url=MONGO_URL, db_name=args.db_name)
 misc_connect = connection.misc_connect
 data_setter = connection.data_setter
 data_fetcher = connection.data_fetcher

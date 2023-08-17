@@ -5,16 +5,15 @@ from data_loader.singleton import DatabaseConnection
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
-parser.add_argument("--mongo_host", type=str, default="localhost")
-parser.add_argument("--mongo_port", type=int, default=27017)
+parser.add_argument("--mongo_url", type=str, default="mongodb://localhost:27017/")
 parser.add_argument("--db_name", type=str, default="equity_data")
 args = parser.parse_args()
 
 
 
-MONGO_URL = f"mongodb://{args.mongo_host}:{args.mongo_port}/"
+MONGO_URL = args.mongo_url
 # Usage
-connection = DatabaseConnection(MONGO_URL)
+connection = DatabaseConnection(mongo_url=MONGO_URL, db_name=args.db_name)
 misc_connect = connection.misc_connect
 data_setter = connection.data_setter
 data_fetcher = connection.data_fetcher
