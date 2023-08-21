@@ -1,3 +1,5 @@
+# type: ignore
+
 import numpy as np
 import pandas as pd
 
@@ -180,3 +182,5 @@ class CointegrationTest(OnlineRegression):
     def get_spread(self):
         return np.sum(self.residuals)
     
+    def get_adf(self):
+        return self.cur_adf

@@ -1,3 +1,4 @@
+# type: ignore
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from dash import dcc, dash_table
@@ -35,6 +36,7 @@ def register_trade_callbacks(app, names):
              Input('slider-sigma-sell-high', 'value'),
              Input('slider-maxlen', 'value'),
              Input('slider-adf-window', 'value'),
+             Input('slider-adf-pvalue', 'value'),
           ],
           [
               State('train-date-1', "start_date"),
@@ -45,7 +47,7 @@ def register_trade_callbacks(app, names):
     )
     def single_pair_trade_plot(n, tickers, method, sigma_buy,
                                sigma_sell_low, sigma_sell_high,
-                               maxlen, adf_window, start_date_train, end_date_train,
+                               maxlen, adf_window, adf_pvalue, start_date_train, end_date_train,
                                start_date_trade, end_date_trade):
         if n is None or n == 0:
             fig_1 = go.Figure()
@@ -68,7 +70,8 @@ def register_trade_callbacks(app, names):
         CAPITAL = 10_000_000
         ticker_1, ticker_2 = tickers
         hyperparameters = {"buy_sigma": sigma_buy, "sell_sigma_low": sigma_sell_low,
-                     "sell_sigma_high": sigma_sell_high, "maxlen": maxlen}
+                     "sell_sigma_high": sigma_sell_high, "maxlen": maxlen, 
+                     "coint_maxlen": adf_window, "adf_pvalue": adf_pvalue}
         method_name = method+"Regression"
 
         strategy = OnlineRegressionStrategy(method_name, CAPITAL, ticker_1, ticker_2, 
@@ -268,21 +271,29 @@ def register_trade_callbacks(app, names):
         fig2.update_layout(annotations=annotations)
 
         res = np.array(strategy.store_res)
-
+        ts1 = strategy.ts[strategy.ts["Mode"] == "Trade"][ticker_1]
+        ts1.index = pd.to_datetime(ts1.index)
+        ts2 = strategy.ts[strategy.ts["Mode"] == "Trade"][ticker_2]
+        ts2.index = pd.to_datetime(ts2.index)
+        ts = ts2 - ts1
+        ts = ts.dropna()
+        mu_ts = ts.mean()
+        var_ts = ts.var()        
+        ts = (ts - mu_ts) / np.sqrt(var_ts)
         # Create a Plotly figure
         fig3 = go.Figure()
         # Add line traces for each column in res
-        fig3.add_trace(go.Scatter(y=res[:, 0], mode='lines', name="Normal Buy"))
-        fig3.add_trace(go.Scatter(y=res[:, 1], mode='lines', name="Swapped Buy"))
-        fig3.add_trace(go.Scatter(y=res[:, 2], mode='lines', name="Normal Sell"))
-        fig3.add_trace(go.Scatter(y=res[:, 3], mode='lines', name="Swapped Sell"))
-        fig3.add_trace(go.Scatter(y=coint_spread, mode='lines', name=f"Cointegration: {adf_window}"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=res[:, 0], mode='lines', name="Normal Buy"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=res[:, 1], mode='lines', name="Swapped Buy"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=res[:, 2], mode='lines', name="Normal Sell"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=res[:, 3], mode='lines', name="Swapped Sell"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=coint_spread, mode='lines', name=f"Cointegration: {adf_window}"))
 
         if not np.isnan(res[:, 4]).any() and not np.isnan(res[:, 5]).any():
-            fig3.add_trace(go.Scatter(y=res[:, 4], mode='lines', name="Normal StopLoss"))
-            fig3.add_trace(go.Scatter(y=res[:, 5], mode='lines', name="Swapped StopLoss"))
-        fig3.add_trace(go.Scatter(y=res[:, -1], mode='lines', name="Estimated Spread"))
-
+            fig3.add_trace(go.Scatter(x=ts.index, y=res[:, 4], mode='lines', name="Normal StopLoss"))
+            fig3.add_trace(go.Scatter(x=ts.index, y=res[:, 5], mode='lines', name="Swapped StopLoss"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=res[:, -1], mode='lines', name="Estimated Spread"))
+        fig3.add_trace(go.Scatter(x=ts.index, y=ts, mode='lines', name="True Spread"))
         # Set title, x label, and legend position
         fig3.update_layout(yaxis_title="Spread", xaxis_title="Time", margin=dict(l=0, r=0, t=36, b=0))
         print('-'*50)
@@ -708,7 +719,13 @@ def register_trade_callbacks(app, names):
     )
     def update_adf_value(value):
         return f'ADF: {value:.2f}' 
-    
+
+    @app.callback(
+    Output('slider-adf-pvalue-value', 'children'),
+        Input('slider-adf-pvalue', 'value')
+    )
+    def update_adf_value(value):
+        return f'p: {value:.3f}' 
     
     # Update slider values for port-trade hyperparameters
 

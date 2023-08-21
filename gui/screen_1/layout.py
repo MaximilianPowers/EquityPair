@@ -156,7 +156,7 @@ def pair_identification():
                 }
         )], width=2),
         create_slider('slider-K', 10, 50, 1, 14),
-        create_slider('slider-mr', 0, 1, 0.01, 1/3),
+        create_slider('slider-stat', 0, 1, 0.01, 1/3),
         create_slider('slider-hurst', 0, 1, 0.01, 1/3),
         create_slider('slider-coint', 0, 1, 0.01, 1/3),
         dbc.Col(dbc.Button(

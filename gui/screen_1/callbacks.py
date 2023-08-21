@@ -1,3 +1,5 @@
+# type: ignore
+
 from dash.dependencies import Input, Output, State
 from dash import html, dash_table
 from plotly.subplots import make_subplots
@@ -53,7 +55,6 @@ def register_analytics_callbacks(app):
 
             # Create figure
             fig.add_trace(go.Scatter(x=df.index, y=ts, mode='lines', name=ticker))
-            #fig.update_layout(title=f"{ticker} (Stationary: {is_stationary}/{p_value:.5f})      (Mean Reversion: {is_mean_reversion}/{h:.5f})", xaxis_title="Date", yaxis_title="Price")
         fig.update_layout(xaxis_title="Date", yaxis_title="Price", margin=dict(l=0, r=0, t=0, b=0))
 
         return fig
@@ -239,22 +240,13 @@ def register_analytics_callbacks(app):
         Output('pairs-success', 'children'),
         [Input('submit-button-5', 'n_clicks')],
         [State('cluster-dropdown', 'value'),
-         State('cluster-selection', 'value'),
-         State('slider-mr', 'value'),
-         State('slider-hurst', 'value'),
-         State('slider-coint', 'value'),
+         State('cluster-selection', 'value')
          ]
     )
-    def identify_pairs(n, clusters, cluster, mr, hurst, coint):
+    def identify_pairs(n, clusters, cluster):
         if n is not None and n != 0:
             if cluster is not None:
                 method, start_date, end_date = clusters.split(':')
-                #if cluster == 'All':
-                #    s = defaultdict(list)
-                #    for cluster in misc_connect.get_clustering_results(method, start_date, end_date):
-                #        s[cluster] = list(misc_connect.get_cluster(method, cluster, start_date, end_date))
-                #    tickers = list(set([item for sublist in s.values() for item in sublist]))
-                #    ticker_pairs = [(tickers[i], tickers[j]) for i in range(len(tickers)) for j in range(i+1, len(tickers))]
                 tickers = list(misc_connect.get_cluster(method, cluster, start_date, end_date))
                 ticker_pairs = [(tickers[i], tickers[j]) for i in range(len(tickers)) for j in range(i+1, len(tickers))]
                 df = data_fetcher.collate_dataset(tickers, start_date, end_date)
@@ -310,11 +302,11 @@ def register_analytics_callbacks(app):
          [
              State('slider-K', 'value'),
              State('slider-hurst', 'value'),
-             State('slider-mr', 'value'),
+             State('slider-stat', 'value'),
              State('slider-coint', 'value'),
           ]
     )
-    def get_pairs_table(n, str_, K, hurst, mr, coint):
+    def get_pairs_table(n, str_, K, hurst, stat, coint):
         if str_ is None:
             fig = go.Figure()
             fig.update_layout(xaxis_title="Date", yaxis_title="Price", margin=dict(l=0, r=0, t=36, b=0))
@@ -322,7 +314,7 @@ def register_analytics_callbacks(app):
         method, cluster, start_date, end_date = str_.split(':')
         cursor = misc_connect.get_pairs_results(method, cluster, start_date, end_date)
         res = dict(cursor)
-        S = ScoreCandidates(hurst, mr, coint, res)
+        S = ScoreCandidates(hurst, stat, coint, res)
 
         final_table = []
         tickers = S.get_top_candidates()
@@ -333,11 +325,11 @@ def register_analytics_callbacks(app):
             t2_beta = safe_round(data_fetcher.get_ticker_field_info(ticker_2, 'beta'), 2)
             t2_market_cap = safe_round(data_fetcher.get_ticker_field_info(ticker_2, 'marketCap'))/1_000_000_000
             coint_val = safe_round(res[key]['coint'], 3)
-            hurst_val = safe_round(res[key]['stationary'], 3)
-            mr_val = safe_round(res[key]['mean_reversion'], 3)
+            stat_val = safe_round(res[key]['stationary'], 3)
+            hurst_val = safe_round(res[key]['mean_reversion'], 3)
 
-            s_ = hurst+mr+coint
-            total = safe_round((coint*coint_val + hurst*hurst_val + mr*mr_val)/s_, 3)
+            s_ = hurst+stat+coint
+            total = safe_round((coint*coint_val + hurst*hurst_val + stat*stat_val)/s_, 3)
             final_table.append({
                     'Ticker 1': ticker_1,
                     'Ticker 2': ticker_2,
@@ -347,7 +339,7 @@ def register_analytics_callbacks(app):
                     'Market Cap 2/B': t2_market_cap,
                     'Coint': coint_val,
                     'Hurst': hurst_val,
-                    'MR': mr_val,
+                    'Stationary': stat_val,
                     'Total': total
                 })
             
@@ -360,7 +352,7 @@ def register_analytics_callbacks(app):
         # Define quantiles for the columns
         quantiles = {
             'Hurst': np.linspace(0, 1, 11),
-            'MR': np.linspace(0, 1, 11),
+            'Stationary': np.linspace(0, 1, 11),
             'Coint': np.linspace(0, 1, 11),
             'Total': np.linspace(0, 1, 11),
             '\u03B2': np.linspace(beta_values.min(), beta_values.max(), 11),
@@ -373,7 +365,7 @@ def register_analytics_callbacks(app):
 
         # Create style_data_conditional
         style_data_conditional = []
-        columns_to_style = ['\u03B2 1', '\u03B2 2', 'Market Cap 1/B', 'Market Cap 2/B', 'Coint', 'Hurst', 'MR', 'Total']
+        columns_to_style = ['\u03B2 1', '\u03B2 2', 'Market Cap 1/B', 'Market Cap 2/B', 'Coint', 'Hurst', 'Stationary', 'Total']
         for column in columns_to_style:
             if column in ['\u03B2 1', '\u03B2 2']:
                 quants = quantiles['\u03B2']
@@ -400,7 +392,7 @@ def register_analytics_callbacks(app):
         )
         nbins = 10
         # Create a 3x2 grid of subplots
-        fig = make_subplots(rows=3, cols=2, subplot_titles=['\u03B2', 'Market Cap', 'Cointegration', 'Hurst', 'MR', 'Total'])
+        fig = make_subplots(rows=3, cols=2, subplot_titles=['\u03B2', 'Market Cap', 'Cointegration', 'Hurst', 'Stationary', 'Total'])
 
         # Add the histogram for beta
         fig.add_trace(
@@ -426,9 +418,9 @@ def register_analytics_callbacks(app):
             row=2, col=2
         )
 
-        # Add the histogram for MR
+        # Add the histogram for stationary
         fig.add_trace(
-            go.Histogram(x=df_fin['MR'], nbinsx=nbins, name='MR'),
+            go.Histogram(x=df_fin['Stationary'], nbinsx=nbins, name='Stationary'),
             row=3, col=1
         )
 
@@ -473,7 +465,7 @@ def register_analytics_callbacks(app):
         ols_hedging_const = ols.cur_alpha
 
         # Compute Kalman Filter hedging ratio
-        kalman = KalmanRegression(df[ticker2], df[ticker1])
+        kalman = KalmanRegression(df[ticker2], df[ticker1], maxlen=2)
         kalman.run()
         kf_hedging_ratio = kalman.cur_beta
         kf_hedging_const = kalman.cur_alpha
@@ -550,11 +542,11 @@ def register_analytics_callbacks(app):
         return f'Hurst: {value:.2f}' 
 
     @app.callback(
-    Output('slider-mr-value', 'children'),
-        Input('slider-mr', 'value')
+    Output('slider-stat-value', 'children'),
+        Input('slider-stat', 'value')
     )
-    def update_mr_value(value):
-        return f'MR: {value:.2f}' 
+    def update_stat_value(value):
+        return f'ADF: {value:.2f}' 
     
     @app.callback(
     Output('slider-K-value', 'children'),

@@ -29,7 +29,7 @@ class IdentifyCandidates:
             ts_vals = self.df[ticker_1][mask].values - self.df[ticker_2][mask].values
             if len(ts_vals) < len(self.df.index)*0.1:
                 continue
-            pa = CointegrationTest(self.df[ticker_1][mask], self.df[ticker_2][mask])
+            pa = CointegrationTest(self.df[ticker_1][mask], self.df[ticker_2][mask], maxlen=10)
             pa.run()
             ts = TimeSeries(ts_vals)
             _, c_pvalue = pa.is_cointegrated(self.coint_cutoff)

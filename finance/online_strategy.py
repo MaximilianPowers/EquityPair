@@ -1,13 +1,16 @@
+# type: ignore
+
 from finance.strategy import Strategy
 from numpy import isnan, sqrt
-from analytics.regression import KalmanRegression, OLSRegression
+from analytics.regression import KalmanRegression, OLSRegression, CointegrationTest
 
 # SET DEFAULT BUY/SELL CONDITION HYPERPARAMETERS
 BASE_BUY_SIGMA = 1 
 BASE_SELL_SIGMA_LOW = 0.5
 BASE_SELL_SIGMA_HIGH = 2
 BASE_MAXLEN = 3000
-
+BASE_COINT_MAXLEN = 6000
+ADF_PVALUE = 0.01
 
 class OnlineRegressionStrategy(Strategy):
     """
@@ -34,7 +37,10 @@ class OnlineRegressionStrategy(Strategy):
             self.method = OLSRegression(self.time_series_1, self.time_series_2, 
                                        maxlen = self.hyperparameters["maxlen"])
     
-
+        self.coint = CointegrationTest(self.time_series_1, self.time_series_2,
+                                       maxlen = self.hyperparameters["coint_maxlen"])
+        
+        
     def set_hyperparameters(self, hyperparameters):
         """
         Sets the hyperparameters for the strategy. We use 
@@ -58,8 +64,11 @@ class OnlineRegressionStrategy(Strategy):
             raise ValueError("buy_sigma must be greater than sell_sigma_low.")
         
         self.hyperparameters["maxlen"] = hyperparameters.get("maxlen", BASE_MAXLEN)
-
+        self.hyperparameters["coint_maxlen"] = hyperparameters.get("coint_maxlen", BASE_COINT_MAXLEN)
+        self.hyperparameters["adf_pvalue"] = hyperparameters.get("adf_pvalue", BASE_COINT_MAXLEN)
+    
     def train_model(self):
+        self.coint.run()    
         self.method.run()
         train_data = self.ts[self.ts["Mode"] == "Train"][[self.ticker_1, self.ticker_2]].values
         tmp = self.method.get_batch_spread(train_data)
@@ -70,7 +79,7 @@ class OnlineRegressionStrategy(Strategy):
         self.threshold_normal_buy, self.threshold_swapped_buy = self.compute_threshold(self.mu_hist, self.hyperparameters["buy_sigma"], std_dev)
         self.threshold_normal_sell_low, self.threshold_swapped_sell_low = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_low"], std_dev)
         self.threshold_normal_sell_high, self.threshold_swapped_sell_high = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_high"], std_dev)
-    
+
     def update_threshold(self, observation):
         # Update threshold with Welford's algorithm
         spread =self.method.get_spread(observation) # Calculate spread
@@ -84,8 +93,10 @@ class OnlineRegressionStrategy(Strategy):
         self.threshold_normal_buy, self.threshold_swapped_buy = self.compute_threshold(self.mu_hist, self.hyperparameters["buy_sigma"], std_dev)
         self.threshold_normal_sell_low, self.threshold_swapped_sell_low = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_low"], std_dev)
         self.threshold_normal_sell_high, self.threshold_swapped_sell_high = self.compute_threshold(self.mu_hist, self.hyperparameters["sell_sigma_high"], std_dev)
+    
     def update_model(self, observation):
         self.method.update(observation)
+        self.coint.update(observation)
         self.update_threshold(observation)
     
     def trade_model(self):
@@ -100,6 +111,7 @@ class OnlineRegressionStrategy(Strategy):
                 continue
             if isnan(observation[0]) or isnan(observation[1]):
                 continue
+
             self.store_results([
                     self.threshold_normal_buy,
                     self.threshold_swapped_buy,
@@ -111,6 +123,8 @@ class OnlineRegressionStrategy(Strategy):
             ])
             date = dates[indx]
             observation = (observation[0], observation[1])
+            self.update_model(observation)
+
             if self.cur_pos == 0:
                 buy_1, buy_2 = self.buy_condition(observation)
                 if buy_1 and not buy_2:
@@ -133,7 +147,6 @@ class OnlineRegressionStrategy(Strategy):
             if portfolio_value < 0:
                 print("Portfolio value is negative. You're broken. Exiting.")
                 break
-            self.update_model(observation)
 
         if self.cur_pos != 0:
             # Close out of all positions at the end of the trading period
@@ -144,9 +157,11 @@ class OnlineRegressionStrategy(Strategy):
 
     def buy_condition(self, observation):
         #TODO Turn these into a class with options methods
+
         if self.cur_pos != 0:
             return False, False
-
+        if self.coint.get_adf() > self.hyperparameters["adf_pvalue"]:
+            return False, False
         if self.method.get_spread(observation) > self.threshold_normal_buy:
             return True, False
         if self.method.get_spread(observation) < self.threshold_swapped_buy:
@@ -156,8 +171,11 @@ class OnlineRegressionStrategy(Strategy):
         
     def sell_condition(self, observation):
         #TODO Turn these into a class with options methods
+
         if self.cur_pos == 0:
             return False
+        if self.coint.get_adf() > self.hyperparameters["adf_pvalue"]:
+            return True
         
         if self.cur_pos == 1:
             if self.method.get_spread(observation) < self.threshold_normal_sell_low:

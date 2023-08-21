@@ -1,3 +1,5 @@
+# type: ignore
+
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
@@ -50,6 +52,12 @@ def run_single_trade(names):
         start_date=datetime(2022, 6, 2),
         end_date=datetime(2023, 7, 1),
     ), width="auto"),
+        dbc.Col(dbc.Button(
+        "Submit", id="run-trade-button", color="primary"
+        ),
+        width="auto",
+        style={'overflow': 'visible', 'text-align': 'left'}
+    )
     ],  style={'margin-bottom': '20px'})
     hyperparameters = dbc.Row([
         create_slider('slider-sigma-buy', 0, 5, 0.1, 1),
@@ -57,12 +65,8 @@ def run_single_trade(names):
         create_slider('slider-sigma-sell-high', 2, 10, 0.1, 4),
         create_slider('slider-maxlen', 10, 5000, 50, 1000),
         create_slider('slider-adf-window', 10, 3000, 50, 600),
-        dbc.Col(dbc.Button(
-            "Submit", id="run-trade-button", color="primary"
-            ),
-            width="auto",
-            style={'overflow': 'visible', 'text-align': 'left'}
-        )
+        create_slider('slider-adf-pvalue', 0.001, 1, 0.001, 0.1),
+
     ], style={'margin-bottom': '10px'})
 
 
